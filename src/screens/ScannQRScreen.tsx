@@ -2,13 +2,13 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { ClientTabParamList } from '../navigation/types';
 
@@ -74,7 +74,7 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
       console.log('🎯 Iniciando flujo de pago...');
       
       // 1. Iniciar pago en el backend
-      const startResponse = await fetch('http://192.168.14.168:3001/op/start-payment', {
+      const startResponse = await fetch('http://192.168.14.98:3001/op/start-payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

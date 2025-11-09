@@ -4,10 +4,10 @@ import AWS from 'aws-sdk';
 // CONFIGURACIÓN MANUAL - Reemplaza react-native-config
 const MANUAL_CONFIG = {
   AWS_REGION: 'us-east-1',
-  AWS_ACCESS_KEY_ID: 'AKIAQ5BAACIV2VSXY7NX',
-  AWS_SECRET_ACCESS_KEY: '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',
+  AWS_ACCESS_KEY_ID: '',
+  AWS_SECRET_ACCESS_KEY: '',
   DYNAMODB_TABLE: 'YOLINK',
-  GOOGLE_MAPS_API_KEY: 'AIzaSyApyzvWHeuxEYr2JmHVa_JWmYS5Iq2e5yw'
+  GOOGLE_MAPS_API_KEY: ''
 };
 
 // Verificar configuración

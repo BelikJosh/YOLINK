@@ -30,7 +30,7 @@ const PaymentWebViewScreen: React.FC<PaymentWebViewScreenProps> = ({ route, navi
         // 3. Completar el pago con los datos de autorización
         setLoading(true);
         
-        const completeResponse = await fetch('http://192.168.14.168:3001/op/complete-payment', {
+        const completeResponse = await fetch('http://192.168.14.98:3001/op/complete-payment', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

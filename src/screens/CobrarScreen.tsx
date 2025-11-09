@@ -9,7 +9,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity
+  TouchableOpacity,
+  View
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { paymentService } from '../services/paymentService'; // NUEVO SERVICIO
@@ -42,24 +43,41 @@ const CobrarScreen = () => {
     }
   }, [isFocused]);
 
-  const cargarUsuarioYProductos = async () => {
-    try {
-      setLoading(true);
-      const userString = await AsyncStorage.getItem('currentUser');
-      if (userString) {
-        const userData = JSON.parse(userString);
-        setUser(userData);
-        
-        const productosData = await productoService.obtenerProductosPorVendedor(userData.id);
-        setProductos(productosData);
-        console.log('🔄 Productos cargados en Cobrar:', productosData.length);
+// En la función cargarUsuarioYProductos del CobrarScreen.tsx
+const cargarUsuarioYProductos = async () => {
+  try {
+    setLoading(true);
+    const userString = await AsyncStorage.getItem('currentUser');
+    if (userString) {
+      const userData = JSON.parse(userString);
+      setUser(userData);
+      
+      console.log('👤 Usuario cargado:', userData.id);
+      
+      // Agregar timeout para evitar bloqueos
+      const productosData = await Promise.race([
+        productoService.obtenerProductosPorVendedor(userData.id),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout cargando productos')), 10000)
+        )
+      ]);
+      
+      setProductos(productosData);
+      console.log('🔄 Productos cargados en Cobrar:', productosData.length);
+      
+      if (productosData.length === 0) {
+        console.log('📭 No hay productos para este vendedor');
       }
-    } catch (error) {
-      console.error('Error cargando datos:', error);
-    } finally {
-      setLoading(false);
+    } else {
+      console.error('❌ No se encontró usuario en AsyncStorage');
     }
-  };
+  } catch (error) {
+    console.error('❌ Error cargando datos:', error);
+    Alert.alert('Error', 'No se pudieron cargar los productos. Verifica tu conexión.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const agregarProducto = (producto: any) => {
     if (!producto.precio) {
