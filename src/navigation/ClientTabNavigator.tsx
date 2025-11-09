@@ -59,7 +59,7 @@ const ClientTabNavigator = ({ route }: any) => {
         component={HomeScreenClient}
         initialParams={{ user }}
         options={{
-          title: 'Explorar',
+          title: 'Explore',
           headerShown: false,
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
@@ -75,7 +75,7 @@ const ClientTabNavigator = ({ route }: any) => {
         component={NearStoresScreen}
         initialParams={{ user }}
         options={{
-          title: 'Cercanos',
+          title: 'Near',
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
               name={focused ? 'location' : 'location-outline'} 
@@ -90,7 +90,7 @@ const ClientTabNavigator = ({ route }: any) => {
         component={ScannQRScreen}
         initialParams={{ user }}
         options={{
-          title: 'Escanear',
+          title: 'Pay',
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
               name={focused ? 'qr-code' : 'qr-code-outline'} 
@@ -106,7 +106,7 @@ const ClientTabNavigator = ({ route }: any) => {
         component={FavoritesStoresScreen}
         initialParams={{ user }}
         options={{
-          title: 'Favoritos',
+          title: 'Favorites',
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
               name={focused ? 'heart' : 'heart-outline'} 
@@ -122,7 +122,7 @@ const ClientTabNavigator = ({ route }: any) => {
         component={ProfileScreenClient}
         initialParams={{ user }}
         options={{
-          title: 'Perfil',
+          title: 'Profile',
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
               name={focused ? 'person' : 'person-outline'} 

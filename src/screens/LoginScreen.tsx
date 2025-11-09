@@ -31,16 +31,16 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    // Validación de campos
+    // Field validation
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Campos requeridos', 'Por favor completa todos los campos');
+      Alert.alert('Required fields', 'Please complete all fields');
       return;
     }
 
-    // Validación de formato de email
+    // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Email inválido', 'Por favor ingresa un correo electrónico válido');
+      Alert.alert('Invalid email', 'Please enter a valid email address');
       return;
     }
 
@@ -50,25 +50,25 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       const result = await dynamoDBService.loginUser(email, password);
 
       if (result.success && result.user) {
-        // Crear objeto user con los datos del resultado
+        // Create user object with the result data
         const user = {
           id: result.user.id,
           name: result.user.nombre,
           email: result.user.email,
-          role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
+          role: result.user.userType === 'vendor' ? 'Vendor' : 'Client',
           userType: result.user.userType,
-          ...result.user // Incluye otros campos del backend
+          ...result.user, // Includes additional backend fields
         };
 
-        console.log('✅ Login exitoso, guardando usuario...', result.user);
+        console.log('✅ Login successful, saving user...', result.user);
 
-        // Guardar sesión
+        // Save session
         await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
-        console.log('💾 Usuario guardado en AsyncStorage');
+        console.log('💾 User saved in AsyncStorage');
 
-        Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
+        Alert.alert('Welcome!', `Hello ${result.user.nombre}`);
 
-        // Navegar según tipo de usuario
+        // Navigate based on user type
         if (result.user.userType === 'client' || result.user.userType === 'cliente') {
           navigation.navigate('ClientTabs', { user });
         } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
@@ -78,39 +78,39 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
         }
 
       } else {
-        Alert.alert('Error de autenticación', result.error || 'Credenciales incorrectas');
+        Alert.alert('Authentication error', result.error || 'Incorrect credentials');
       }
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('Error de conexión', 'No se pudo conectar con el servidor. Intenta nuevamente.');
+      Alert.alert('Connection error', 'Could not connect to the server. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Recuperar contraseña - ESTA FUNCIÓN DEBE ESTAR FUERA DE handleLogin
+  // Forgot password
   const handleForgotPassword = () => {
     Alert.alert(
-      'Recuperar contraseña',
-      'Ingresa tu correo electrónico para recibir instrucciones',
+      'Recover password',
+      'Enter your email to receive instructions',
       [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Enviar', onPress: () => console.log('Password recovery requested') }
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send', onPress: () => console.log('Password recovery requested') },
       ]
     );
   };
-    
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header con Logo */}
+        {/* Header with Logo */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <Image
@@ -123,7 +123,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.tagline}>Where local commerce beats</Text>
         </View>
 
-        {/* Formulario */}
+        {/* Form */}
         <View style={styles.formContainer}>
           {/* Email Input */}
           <View style={styles.inputGroup}>
@@ -133,7 +133,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="correo@ejemplo.com"
+                placeholder="email@example.com"
                 placeholderTextColor="#95a5a6"
                 value={email}
                 onChangeText={setEmail}
@@ -153,7 +153,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="Contraseña"
+                placeholder="Password"
                 placeholderTextColor="#95a5a6"
                 value={password}
                 onChangeText={setPassword}
@@ -162,28 +162,28 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
                 autoComplete="password"
                 editable={!loading}
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.eyeIcon}
                 onPress={() => setShowPassword(!showPassword)}
                 disabled={loading}
               >
-                <Ionicons 
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'} 
-                  size={20} 
-                  color="#95a5a6" 
+                <Ionicons
+                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                  size={20}
+                  color="#95a5a6"
                 />
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Forgot Password */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.forgotPasswordButton}
             onPress={handleForgotPassword}
             disabled={loading}
           >
             <Text style={styles.forgotPasswordText}>
-              ¿Olvidaste tu contraseña?
+              Forgot your password?
             </Text>
           </TouchableOpacity>
 
@@ -197,14 +197,14 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             {loading ? (
               <ActivityIndicator color="#f7fff9" size="small" />
             ) : (
-              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              <Text style={styles.loginButtonText}>Sign In</Text>
             )}
           </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>o</Text>
+            <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
 
@@ -214,17 +214,17 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             onPress={() => navigation.navigate('CreateAccount')}
             disabled={loading}
           >
-            <Text style={styles.registerButtonText}>Crear nueva cuenta</Text>
+            <Text style={styles.registerButtonText}>Create new account</Text>
           </TouchableOpacity>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Al iniciar sesión, aceptas nuestros{' '}
-            <Text style={styles.footerLink}>Términos de Servicio</Text>
-            {' '}y{' '}
-            <Text style={styles.footerLink}>Política de Privacidad</Text>
+            By signing in, you agree to our{' '}
+            <Text style={styles.footerLink}>Terms of Service</Text>
+            {' '}and{' '}
+            <Text style={styles.footerLink}>Privacy Policy</Text>
           </Text>
         </View>
       </ScrollView>
@@ -281,11 +281,6 @@ const styles = StyleSheet.create({
     color: '#4ecdc4',
     fontStyle: 'italic',
     marginBottom: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#1a535c',
-    fontWeight: '500',
   },
   formContainer: {
     paddingHorizontal: 24,
@@ -380,30 +375,6 @@ const styles = StyleSheet.create({
     color: '#1a535c',
     fontSize: 16,
     fontWeight: '600',
-  },
-  demoAccounts: {
-    backgroundColor: '#c1f9e1',
-    borderRadius: 12,
-    padding: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4ecdc4',
-  },
-  demoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#1a535c',
-  },
-  demoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
-  },
-  demoText: {
-    fontSize: 13,
-    color: '#1a535c',
-    flex: 1,
   },
   footer: {
     paddingHorizontal: 24,
