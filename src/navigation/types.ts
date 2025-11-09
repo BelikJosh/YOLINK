@@ -12,11 +12,11 @@ export type RootStackParamList = {
 };
 
 export type ClientTabParamList = {
-  Explore: undefined;
-  Near: undefined;
-  Scann: undefined;
-  Favorites: undefined;
-  ProfileClient: { user?: any }; // Añade user como parámetro opcional
+  Explore: { user?: UserData };
+  Near: { user?: UserData };
+  Scann: { user?: UserData };
+  Favorites: { user?: UserData };
+  ProfileClient: { user?: UserData };
 };
 
 export type VendorTabParamList = {

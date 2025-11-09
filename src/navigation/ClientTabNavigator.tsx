@@ -4,7 +4,7 @@ import React from 'react';
 import FavoritesStoresScreen from '../screens/FavoritesStoresScreen';
 import HomeScreenClient from '../screens/HomeScreenClient';
 import NearStoresScreen from '../screens/NearStoresScreen';
-import ProfileScreen from '../screens/ProfileScreen';
+import ProfileScreenClient from '../screens/ProfileScreenClient'; // Cambia esta importación
 import ScannQRScreen from '../screens/ScannQRScreen';
 import { ClientTabParamList } from './types';
 
@@ -133,7 +133,7 @@ const ClientTabNavigator = ({ route }: any) => {
       />
       <Tab.Screen
         name="ProfileClient"
-        component={ProfileScreen}
+        component={ProfileScreenClient} // Cambia a ProfileScreenClient
         initialParams={{ user }}
         options={{
           title: 'Perfil',

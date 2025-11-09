@@ -42,6 +42,7 @@ const NearStoresScreen = ({ route, navigation }: any) => {
         { 
           text: 'Ver en mapa', 
           onPress: () => {
+            console.log('Navegando a Explore con vendedor:', vendor.name);
             // Navegar de vuelta al tab de Explore con el vendedor seleccionado
             navigation.navigate('Explore', { 
               vendorToFocus: vendor 
