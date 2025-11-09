@@ -1,46 +1,101 @@
 // services/productoService.ts
-import { dynamodb, TABLE_NAME, Producto } from '../aws-config';
+import { dynamodb, Producto, TABLE_NAME } from '../aws-config';
 
 export const productoService = {
-  // Obtener productos del vendedor - VERSIÓN CORREGIDA
+  // Obtener productos del vendedor - OPTIMIZADO
   async obtenerProductosPorVendedor(vendedorId: string): Promise<Producto[]> {
     try {
-      const params = {
+      console.log('🔍 Buscando productos para:', vendedorId);
+      
+      if (!dynamodb) {
+        console.error('❌ DynamoDB no configurado');
+        return [];
+      }
+
+      // INTENTO 1: Query con índice (más rápido)
+      try {
+        console.log('🎯 Intentando query con índice...');
+        const queryParams = {
+          TableName: TABLE_NAME,
+          IndexName: 'vendedorId-index', // Este índice debe existir en DynamoDB
+          KeyConditionExpression: 'vendedorId = :vendedorId',
+          ExpressionAttributeValues: {
+            ':vendedorId': vendedorId
+          },
+          Limit: 50 // Limitar resultados para mayor velocidad
+        };
+
+        const queryResult = await dynamodb.query(queryParams).promise();
+        console.log('✅ Query exitoso, productos encontrados:', queryResult.Items?.length);
+        
+        if (queryResult.Items && queryResult.Items.length > 0) {
+          return this.procesarProductos(queryResult.Items, vendedorId);
+        }
+      } catch (queryError) {
+        console.log('⚠️ Query falló, intentando scan...', queryError.message);
+      }
+
+      // INTENTO 2: Scan optimizado (más lento pero funciona sin índice)
+      console.log('🔎 Realizando scan optimizado...');
+      const scanParams = {
         TableName: TABLE_NAME,
         FilterExpression: 'vendedorId = :vendedorId',
         ExpressionAttributeValues: {
           ':vendedorId': vendedorId
-        }
+        },
+        Limit: 50, // Limitar para evitar timeouts
+        ProjectionExpression: 'id, vendedorId, nombre, precio, stock, categoria, descripcion, imagen, fechaCreacion, activo' // Solo campos necesarios
       };
 
-      const result = await dynamodb.scan(params).promise();
+      const scanResult = await dynamodb.scan(scanParams).promise();
+      console.log('✅ Scan completado, productos:', scanResult.Items?.length);
       
-      // Validar y asegurar que todos los productos tengan los campos necesarios
-      const productos = (result.Items as Producto[] || []).map(producto => ({
-        id: producto.id || '',
-        vendedorId: producto.vendedorId || vendedorId,
-        nombre: producto.nombre || 'Producto sin nombre',
-        descripcion: producto.descripcion || '',
-        precio: producto.precio || 0,
-        categoria: producto.categoria || 'General',
-        imagen: producto.imagen || '',
-        stock: producto.stock || 0,
-        fechaCreacion: producto.fechaCreacion || new Date().toISOString(),
-        activo: producto.activo !== undefined ? producto.activo : true
-      }));
+      return this.procesarProductos(scanResult.Items || [], vendedorId);
 
-      console.log('📦 Productos cargados y validados:', productos);
-      return productos;
-    } catch (error) {
-      console.error('Error obteniendo productos:', error);
+    } catch (error: any) {
+      console.error('❌ Error en obtenerProductosPorVendedor:', {
+        message: error.message,
+        code: error.code,
+        name: error.name
+      });
+      
       return [];
     }
   },
 
-  // Crear nuevo producto - VERSIÓN CORREGIDA
+  // Procesar productos - función auxiliar
+  procesarProductos(items: any[], vendedorId: string): Producto[] {
+    if (!items || items.length === 0) {
+      console.log('📭 No se encontraron productos');
+      return [];
+    }
+
+    const productos = items
+      .filter(item => item.vendedorId === vendedorId) // Filtro adicional por seguridad
+      .map((item: any) => ({
+        id: item.id || `prod_${Date.now()}`,
+        vendedorId: item.vendedorId || vendedorId,
+        nombre: item.nombre || 'Producto sin nombre',
+        descripcion: item.descripcion || '',
+        precio: Number(item.precio) || 0,
+        categoria: item.categoria || 'General',
+        imagen: item.imagen || '',
+        stock: Number(item.stock) || 0,
+        fechaCreacion: item.fechaCreacion || new Date().toISOString(),
+        activo: item.activo !== undefined ? item.activo : true
+      }));
+
+    console.log('📦 Productos procesados:', productos.length);
+    productos.forEach((prod, index) => {
+      console.log(`   ${index + 1}. ${prod.nombre} - $${prod.precio}`);
+    });
+
+    return productos;
+  },
+
+  // Crear nuevo producto - OPTIMIZADO
   async crearProducto(producto: Producto): Promise<boolean> {
     try {
-      // Validar que todos los campos requeridos estén presentes
       const productoValidado: Producto = {
         id: producto.id || `producto_${Date.now()}`,
         vendedorId: producto.vendedorId,
@@ -54,7 +109,7 @@ export const productoService = {
         activo: producto.activo !== undefined ? producto.activo : true
       };
 
-      console.log('💾 Guardando producto:', productoValidado);
+      console.log('💾 Guardando producto:', productoValidado.nombre);
 
       const params = {
         TableName: TABLE_NAME,
@@ -62,14 +117,15 @@ export const productoService = {
       };
 
       await dynamodb.put(params).promise();
+      console.log('✅ Producto guardado exitosamente');
       return true;
     } catch (error) {
-      console.error('Error creando producto:', error);
+      console.error('❌ Error creando producto:', error);
       return false;
     }
   },
 
-  // ... el resto de los métodos se mantiene igual
+  // ... otros métodos se mantienen igual
   async actualizarProducto(productoId: string, updates: Partial<Producto>): Promise<boolean> {
     try {
       const updateExpression: string[] = [];
@@ -77,16 +133,18 @@ export const productoService = {
       const expressionAttributeValues: { [key: string]: any } = {};
 
       Object.keys(updates).forEach((key: string) => {
-        const attributeKey = `#${key}`;
-        const valueKey = `:${key}`;
-        
-        updateExpression.push(`${attributeKey} = ${valueKey}`);
-        expressionAttributeNames[attributeKey] = key;
-        expressionAttributeValues[valueKey] = (updates as any)[key];
+        if (key !== 'id' && key !== 'vendedorId') {
+          const attributeKey = `#${key}`;
+          const valueKey = `:${key}`;
+          
+          updateExpression.push(`${attributeKey} = ${valueKey}`);
+          expressionAttributeNames[attributeKey] = key;
+          expressionAttributeValues[valueKey] = (updates as any)[key];
+        }
       });
 
       if (updateExpression.length === 0) {
-        console.log('No hay campos para actualizar');
+        console.log('ℹ️ No hay campos para actualizar');
         return true;
       }
 
@@ -99,9 +157,10 @@ export const productoService = {
       };
 
       await dynamodb.update(params).promise();
+      console.log('✅ Producto actualizado exitosamente');
       return true;
     } catch (error) {
-      console.error('Error actualizando producto:', error);
+      console.error('❌ Error actualizando producto:', error);
       return false;
     }
   },
@@ -114,9 +173,10 @@ export const productoService = {
       };
 
       await dynamodb.delete(params).promise();
+      console.log('✅ Producto eliminado exitosamente');
       return true;
     } catch (error) {
-      console.error('Error eliminando producto:', error);
+      console.error('❌ Error eliminando producto:', error);
       return false;
     }
   }

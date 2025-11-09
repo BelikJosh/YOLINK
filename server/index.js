@@ -31,7 +31,7 @@ const {
   SENDER_WALLET_ADDRESS_URL,    // Cliente 
   SENDER_KEY_ID,
   SENDER_PRIVATE_KEY_PATH,
-  FINISH_REDIRECT_URL = 'http://192.168.14.168:3001/op/finish',
+  FINISH_REDIRECT_URL = 'http://192.168.14.98:3001/op/finish',
 } = process.env;
 
 // Verificar variables
@@ -410,7 +410,7 @@ app.get('/op/payment-status/:incomingPaymentId', async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log('\n🚀 SERVIDOR OPENPAYMENTS INICIADO');
   console.log('📍 Local:    http://localhost:' + PORT);
-  console.log('🌐 Red:      http://192.168.14.168:' + PORT);
+  console.log('🌐 Red:      http://192.168.14.98:' + PORT);
   console.log('\n📋 Rutas disponibles:');
   console.log('   ✅ POST /op/generate-payment-qr');
   console.log('   ✅ POST /op/start-payment');

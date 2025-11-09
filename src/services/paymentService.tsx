@@ -3,7 +3,7 @@
 import axios from 'axios';
 
 // Cambia localhost por tu IP local
-const API_BASE_URL = 'http://192.168.14.168:3001'; // ← USA TU IP AQUÍ
+const API_BASE_URL = 'http://192.168.14.98:3001'; // ← USA TU IP AQUÍ
 
 export const paymentService = {
   async generatePaymentQR(amount: string, description: string, vendorName: string) {

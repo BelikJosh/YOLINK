@@ -287,6 +287,14 @@ const NearStoresScreen: React.FC<Props> = ({ navigation, user }) => {
     );
   }
 
+  const handleRoute = (store: any) => {
+    navigation.navigate('Explore', { store });
+  };
+
+  const handleFavorite = (store: any) => {
+    navigation.navigate('Favorites', { store });
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
