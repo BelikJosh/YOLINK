@@ -1,17 +1,14 @@
+// navigation/VendorTabNavigator.tsx
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
-import { Text, View } from 'react-native'; // Añade View
+import { Text, View } from 'react-native';
 import HomeScreenVendor from '../screens/HomeScreenVendor';
 import ProfileScreen from '../screens/ProfileScreen';
 import { VendorTabParamList } from './types';
+import CatalogueScreenVendor from '../screens/CatalogueScreenVendor'; // Importa el componente real
+import CobrarScreen from '../screens/CobrarScreen';
 
-// Screens placeholder con componentes básicos
-const CatalogueScreenVendor = () => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-    <Text>Catálogo - En desarrollo</Text>
-  </View>
-);
-
+// Screens placeholder con componentes básicos (solo los que están en desarrollo)
 const MakeAcountScreen = () => (
   <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
     <Text>Cobrar - En desarrollo</Text>
@@ -68,7 +65,7 @@ const VendorTabNavigator = () => {
       />
       <Tab.Screen 
         name="Catalogue" 
-        component={CatalogueScreenVendor}
+        component={CatalogueScreenVendor} // Usa el componente importado
         options={{
           title: 'Catálogo',
           tabBarIcon: ({ focused }) => (
@@ -77,15 +74,15 @@ const VendorTabNavigator = () => {
         }}
       />
       <Tab.Screen 
-        name="MakeCount" 
-        component={MakeAcountScreen}
-        options={{
-          title: 'Cobrar',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="💰" focused={focused} />
-          ),
-        }}
-      />
+  name="MakeCount" 
+  component={CobrarScreen}
+  options={{
+    title: 'Cobrar',
+    tabBarIcon: ({ focused }) => (
+      <TextIcon emoji="💰" focused={focused} />
+    ),
+  }}
+/>
       <Tab.Screen 
         name="Sales" 
         component={SalesScreenVendor}

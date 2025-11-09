@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { RootStackParamList } from '../navigation/Appnavigator';
 import { dynamoDBService } from '../services/dynamoDBService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -31,62 +32,74 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    // Validación de campos
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Campos requeridos', 'Por favor completa todos los campos');
-      return;
+// Validación de campos
+if (!email.trim() || !password.trim()) {
+  Alert.alert('Campos requeridos', 'Por favor completa todos los campos');
+  return;
+}
+
+// Validación de formato de email
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (!emailRegex.test(email)) {
+  Alert.alert('Email inválido', 'Por favor ingresa un correo electrónico válido');
+  return;
+}
+
+setLoading(true);
+
+try {
+  const result = await dynamoDBService.loginUser(email, password);
+
+  if (result.success && result.user) {
+    // Crear objeto user con los datos del resultado
+    const user = {
+      id: result.user.id,
+      name: result.user.nombre,
+      email: result.user.email,
+      role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
+      userType: result.user.userType,
+      ...result.user // Incluye otros campos del backend
+    };
+
+    console.log('✅ Login exitoso, guardando usuario...', result.user);
+
+    // Guardar sesión
+    await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
+    console.log('💾 Usuario guardado en AsyncStorage');
+
+    Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
+
+    // Navegar según tipo de usuario
+    if (result.user.userType === 'client' || result.user.userType === 'cliente') {
+      navigation.navigate('ClientTabs', { user });
+    } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
+      navigation.navigate('VendorTabs', { user });
+    } else {
+      navigation.navigate('ClientTabs', { user });
     }
 
-    // Validación de formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Email inválido', 'Por favor ingresa un correo electrónico válido');
-      return;
-    }
+  } else {
+    Alert.alert('Error de autenticación', result.error || 'Credenciales incorrectas');
+  }
+} catch (error) {
+  console.error('Login error:', error);
+  Alert.alert('Error de conexión', 'No se pudo conectar con el servidor. Intenta nuevamente.');
+} finally {
+  setLoading(false);
+}
 
-    setLoading(true);
-
-    try {
-      const result = await dynamoDBService.loginUser(email, password);
-
-      if (result.success && result.user) {
-        // Guardar sesión
-        await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
-
-        // Navegar según tipo de usuario
-        const navigateTo = result.user.userType === 'vendor' ? 'VendorTabs' : 'ClientTabs';
-        
-        navigation.navigate(navigateTo, { 
-          user: {
-            ...result.user,
-            name: result.user.nombre,
-            role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente'
-          }
-        });
-
-        Alert.alert('Bienvenido', `Hola ${result.user.nombre}`);
-      } else {
-        Alert.alert('Error de autenticación', result.error || 'Credenciales incorrectas');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert('Error de conexión', 'No se pudo conectar con el servidor. Intenta nuevamente.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = () => {
-    Alert.alert(
-      'Recuperar contraseña',
-      'Ingresa tu correo electrónico para recibir instrucciones',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Enviar', onPress: () => console.log('Password recovery requested') }
-      ]
-    );
-  };
-
+// Recuperar contraseña
+const handleForgotPassword = () => {
+  Alert.alert(
+    'Recuperar contraseña',
+    'Ingresa tu correo electrónico para recibir instrucciones',
+    [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Enviar', onPress: () => console.log('Password recovery requested') }
+    ]
+  );
+};
+    
   return (
     <KeyboardAvoidingView
       style={styles.container}
