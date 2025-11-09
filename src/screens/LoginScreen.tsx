@@ -1,18 +1,18 @@
 // screens/LoginScreen.tsx
+import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView
+  View
 } from 'react-native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/Appnavigator';
 import { dynamoDBService } from '../services/dynamoDBService';
 
@@ -38,21 +38,30 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
     try {
       const result = await dynamoDBService.loginUser(email, password);
-      
+
       if (result.success && result.user) {
-        // Navegar al Home correspondiente según el rol
-        navigation.navigate('Home', { 
-          user: {
-            id: result.user.id,
-            name: result.user.nombre,
-            email: result.user.email,
-            role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
-            userType: result.user.userType,
-            ...result.user
-          }
-        });
-        
+        // Crear objeto user con los datos del resultado
+        const user = {
+          id: result.user.id,
+          name: result.user.nombre,
+          email: result.user.email,
+          role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
+          userType: result.user.userType,
+          ...result.user
+        };
+
         Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
+
+        // Navegar al tab correspondiente según el tipo de usuario
+        if (result.user.userType === 'client' || result.user.userType === 'cliente') {
+          navigation.navigate('ClientTabs', { user });
+        } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
+          navigation.navigate('VendorTabs', { user });
+        } else {
+          // Por defecto, si no se reconoce el tipo, ir a cliente
+          navigation.navigate('ClientTabs', { user });
+        }
+
       } else {
         Alert.alert('Error', result.error || 'Credenciales incorrectas');
       }
@@ -65,7 +74,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
@@ -102,7 +111,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
                 secureTextEntry={!showPassword}
                 autoComplete="password"
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={() => setShowPassword(!showPassword)}
               >
@@ -113,7 +122,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.loginButton, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
@@ -125,14 +134,14 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.forgotPassword}
             onPress={() => Alert.alert('Recuperar Contraseña', 'Funcionalidad en desarrollo')}
           >
             <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.createAccountButton}
             onPress={() => navigation.navigate('CreateAccount')}
           >

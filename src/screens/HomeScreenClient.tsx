@@ -1,18 +1,18 @@
-// screens/HomeScreenClient.tsx
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Alert, 
+import { StackNavigationProp } from '@react-navigation/stack';
+import React, { useState } from 'react';
+import {
+  Alert,
   Dimensions,
-  TouchableOpacity 
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/Appnavigator';
+import { ClientTabParamList } from '../navigation/types'; // Cambia esta importación
 
-type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
+// Cambia el tipo para usar ClientTabParamList en lugar de RootStackParamList
+type HomeScreenNavigationProp = StackNavigationProp<ClientTabParamList, 'Explore'>;
 
 type Props = {
   navigation: HomeScreenNavigationProp;
@@ -22,6 +22,7 @@ type Props = {
 const { width, height } = Dimensions.get('window');
 
 const HomeScreenClient = ({ navigation, route }: Props) => {
+  // Tu código existente permanece igual...
   const user = route?.params?.user;
   const [region, setRegion] = useState({
     latitude: user?.ubicacionActual?.lat || 19.4326,
@@ -29,6 +30,8 @@ const HomeScreenClient = ({ navigation, route }: Props) => {
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   });
+
+  // ... resto del código igual
 
   // Negocios de ejemplo
   const businessMarkers = [

@@ -1,10 +1,10 @@
-// screens/HomeScreenVendor.tsx
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/Appnavigator';
+import React from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RootStackParamList } from '../navigation/types'; // Cambia a RootStackParamList
 
-type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
+// Cambia el tipo para usar RootStackParamList
+type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'VendorTabs'>;
 
 type Props = {
   navigation: HomeScreenNavigationProp;
@@ -20,7 +20,10 @@ const HomeScreenVendor = ({ navigation, route }: Props) => {
       '¿Estás seguro de que quieres cerrar sesión?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Sí, cerrar', onPress: () => navigation.navigate('Login') },
+        { 
+          text: 'Sí, cerrar', 
+          onPress: () => navigation.navigate('Login') // Ahora debería funcionar
+        },
       ]
     );
   };
@@ -31,6 +34,11 @@ const HomeScreenVendor = ({ navigation, route }: Props) => {
       <View style={styles.header}>
         <Text style={styles.greeting}>¡Hola, {user?.name}!</Text>
         <Text style={styles.subtitle}>Panel de Vendedor</Text>
+        
+        {/* Botón de cerrar sesión */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Accesos Rápidos */}
@@ -119,6 +127,19 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#e2e8f0',
+    marginBottom: 15,
+  },
+  logoutButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
     backgroundColor: '#fff',
