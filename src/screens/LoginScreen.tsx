@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { RootStackParamList } from '../navigation/Appnavigator';
 import { dynamoDBService } from '../services/dynamoDBService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -29,48 +30,55 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-  if (!email.trim() || !password.trim()) {
-    Alert.alert('Error', 'Por favor completa todos los campos');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const result = await dynamoDBService.loginUser(email, password);
-
-    if (result.success && result.user) {
-      // Crear objeto user con los datos del resultado
-      const user = {
-        id: result.user.id,
-        name: result.user.nombre,
-        email: result.user.email,
-        role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
-        userType: result.user.userType,
-        ...result.user // Esto incluye todos los campos adicionales
-      };
-
-      Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
-
-      // Navegar al tab correspondiente según el tipo de usuario
-      if (result.user.userType === 'client' || result.user.userType === 'cliente') {
-        navigation.navigate('ClientTabs', { user }); // ← Asegúrate de pasar el user completo
-      } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
-        navigation.navigate('VendorTabs', { user });
-      } else {
-        navigation.navigate('ClientTabs', { user });
-      }
-
-    } else {
-      Alert.alert('Error', result.error || 'Credenciales incorrectas');
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Por favor completa todos los campos');
+      return;
     }
-  } catch (error) {
-    Alert.alert('Error', 'Error al conectar con el servidor');
-    console.error('Login error:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+
+    setLoading(true);
+
+    try {
+      const result = await dynamoDBService.loginUser(email, password);
+
+      if (result.success && result.user) {
+        // Crear objeto user con los datos del resultado
+        const user = {
+          id: result.user.id,
+          name: result.user.nombre,
+          email: result.user.email,
+          role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
+          userType: result.user.userType,
+          ...result.user // Esto incluye todos los campos adicionales
+        };
+
+        console.log('✅ Login exitoso, guardando usuario...', result.user);
+        
+        // GUARDAR EN ASYNC STORAGE
+        await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
+        console.log('💾 Usuario guardado en AsyncStorage');
+
+        Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
+
+        // Navegar al tab correspondiente según el tipo de usuario
+        if (result.user.userType === 'client' || result.user.userType === 'cliente') {
+          navigation.navigate('ClientTabs', { user });
+        } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
+          navigation.navigate('VendorTabs', { user });
+        } else {
+          navigation.navigate('ClientTabs', { user });
+        }
+
+      } else {
+        Alert.alert('Error', result.error || 'Credenciales incorrectas');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Error al conectar con el servidor');
+      console.error('Login error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -153,6 +161,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
+// Los estilos se mantienen igual...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
