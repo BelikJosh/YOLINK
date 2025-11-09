@@ -3,8 +3,6 @@ export type RootStackParamList = {
   CreateAccount: undefined;
   ClientTabs: { user: any };
   VendorTabs: { user: any };
-  Profile: { user: any };
-  Settings: undefined;
 };
 
 export type ClientTabParamList = {
@@ -12,7 +10,7 @@ export type ClientTabParamList = {
   Near: undefined;
   Scann: undefined;
   Favorites: undefined;
-  ProfileClient: undefined;
+  ProfileClient: { user?: any }; // Añade user como parámetro opcional
 };
 
 export type VendorTabParamList = {

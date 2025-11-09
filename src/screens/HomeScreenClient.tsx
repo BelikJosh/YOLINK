@@ -1,287 +1,337 @@
-import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState } from 'react';
-import {
-  Alert,
-  Dimensions,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { ClientTabParamList } from '../navigation/types'; // Cambia esta importación
-
-// Cambia el tipo para usar ClientTabParamList en lugar de RootStackParamList
-type HomeScreenNavigationProp = StackNavigationProp<ClientTabParamList, 'Explore'>;
-
-type Props = {
-  navigation: HomeScreenNavigationProp;
-  route?: any;
-};
+// src/screens/HomeScreenClient.tsx
+import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 
 const { width, height } = Dimensions.get('window');
 
-const HomeScreenClient = ({ navigation, route }: Props) => {
-  // Tu código existente permanece igual...
-  const user = route?.params?.user;
-  const [region, setRegion] = useState({
-    latitude: user?.ubicacionActual?.lat || 19.4326,
-    longitude: user?.ubicacionActual?.lng || -99.1332,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  });
-
-  // ... resto del código igual
-
-  // Negocios de ejemplo
-  const businessMarkers = [
-    {
-      id: 1,
-      title: "Artesanías Mexicanas",
-      description: "Productos artesanales locales",
-      coordinate: { latitude: 19.4326, longitude: -99.1332 },
-      type: 'artesanias'
+// Datos de ejemplo para vendedores/artesanías
+const VENDORS_DATA = [
+  {
+    id: '1',
+    name: 'Joyeria Jade',
+    category: 'Joyería',
+    location: {
+      latitude: 17.0606,
+      longitude: -96.7252
     },
-    {
-      id: 2,
-      title: "Restaurante Local", 
-      description: "Comida tradicional mexicana",
-      coordinate: { latitude: 19.4340, longitude: -99.1350 },
-      type: 'restaurante'
+    rating: 4.8
+  },
+  {
+    id: '2',
+    name: 'Café Colonial',
+    category: 'Café',
+    location: {
+      latitude: 17.0610,
+      longitude: -96.7230
     },
-    {
-      id: 3,
-      title: "Galería de Arte",
-      description: "Exposiciones de artistas locales", 
-      coordinate: { latitude: 19.4310, longitude: -99.1310 },
-      type: 'arte'
+    rating: 4.5
+  },
+  {
+    id: '3',
+    name: 'Máscaras Artesanales',
+    category: 'Artesanías',
+    location: {
+      latitude: 17.0620,
+      longitude: -96.7260
     },
-    {
-      id: 4,
-      title: "Mercado Tradicional",
-      description: "Productos frescos y souvenirs",
-      coordinate: { latitude: 19.4330, longitude: -99.1340 },
-      type: 'mercado'
-    }
-  ];
+    rating: 4.9
+  },
+  {
+    id: '4',
+    name: 'Templo Histórico',
+    category: 'Punto de Interés',
+    location: {
+      latitude: 17.0590,
+      longitude: -96.7240
+    },
+    rating: 4.7
+  }
+];
 
-  const handleMarkerPress = (marker: any) => {
-    Alert.alert(
-      marker.title,
-      marker.description,
-      [
-        { text: 'Cerrar', style: 'cancel' },
-        { text: 'Ver Detalles', onPress: () => console.log('Ver detalles:', marker.title) }
-      ]
-    );
+// Ubicación por defecto (Oaxaca centro)
+const DEFAULT_REGION: Region = {
+  latitude: 17.0606,
+  longitude: -96.7252,
+  latitudeDelta: 0.02,
+  longitudeDelta: 0.02,
+};
+
+export default function HomeScreenClient() {
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<any>(null);
+  const [region, setRegion] = useState<Region>(DEFAULT_REGION);
+  const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setErrorMsg('Permiso de ubicación denegado');
+          return;
+        }
+
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        
+        const newLocation = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        };
+        
+        setUserLocation(newLocation);
+        
+        // Actualizar la región para centrar en la ubicación del usuario
+        setRegion({
+          ...newLocation,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        });
+      } catch (error) {
+        console.error('Error getting location:', error);
+        setErrorMsg('Error al obtener la ubicación');
+      }
+    })();
+  }, []);
+
+  const handleVendorPress = (vendor: any) => {
+    setSelectedVendor(vendor);
+    // Centrar el mapa en el vendedor seleccionado
+    setRegion({
+      latitude: vendor.location.latitude,
+      longitude: vendor.location.longitude,
+      latitudeDelta: 0.02,
+      longitudeDelta: 0.02,
+    });
   };
 
-  const getMarkerColor = (type: string) => {
-    switch(type) {
-      case 'artesanias': return '#FF6B6B';
-      case 'restaurante': return '#4ECDC4'; 
-      case 'arte': return '#45B7D1';
-      case 'mercado': return '#96CEB4';
-      default: return '#667eea';
-    }
+  const handleMapReady = () => {
+    setMapReady(true);
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.welcome}>¡Hola, {user?.nombre}!</Text>
-        <Text style={styles.role}>👤 Turista - Explorando negocios locales</Text>
-        <Text style={styles.location}>📍 CDMX, México</Text>
-      </View>
-
       {/* Mapa */}
-      <View style={styles.mapContainer}>
-        <MapView
-          style={styles.map}
-          provider={PROVIDER_GOOGLE}
-          region={region}
-          onRegionChangeComplete={setRegion}
-          showsUserLocation={true}
-          showsMyLocationButton={true}
-          showsCompass={true}
-        >
-          {businessMarkers.map(marker => (
-            <Marker
-              key={marker.id}
-              coordinate={marker.coordinate}
-              title={marker.title}
-              description={marker.description}
-              onPress={() => handleMarkerPress(marker)}
-              pinColor={getMarkerColor(marker.type)}
-            />
+      <MapView
+        style={styles.map}
+        provider={PROVIDER_GOOGLE}
+        region={region}
+        onMapReady={handleMapReady}
+        showsUserLocation={true}
+        showsMyLocationButton={true}
+        showsCompass={true}
+        showsScale={true}
+      >
+        {/* Marcadores de vendedores */}
+        {VENDORS_DATA.map((vendor) => (
+          <Marker
+            key={vendor.id}
+            coordinate={vendor.location}
+            title={vendor.name}
+            description={vendor.category}
+            onPress={() => handleVendorPress(vendor)}
+          />
+        ))}
+      </MapView>
+
+      {/* Header de búsqueda */}
+      <View style={styles.searchContainer}>
+        <Text style={styles.searchTitle}>Search</Text>
+        <Text style={styles.searchSubtitle}>Artesanias Oaxaqueñas</Text>
+        
+        {/* Lista de categorías */}
+        <View style={styles.categoriesContainer}>
+          {VENDORS_DATA.map((vendor) => (
+            <TouchableOpacity 
+              key={vendor.id} 
+              style={styles.categoryItem}
+              onPress={() => handleVendorPress(vendor)}
+            >
+              <Text style={styles.categoryText}>• {vendor.name}</Text>
+            </TouchableOpacity>
           ))}
-        </MapView>
+        </View>
+
+        <View style={styles.separator} />
       </View>
 
-      {/* Leyenda de colores */}
-      <View style={styles.legend}>
-        <Text style={styles.legendTitle}>Leyenda:</Text>
-        <View style={styles.legendItems}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#FF6B6B' }]} />
-            <Text style={styles.legendText}>Artesanías</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#4ECDC4' }]} />
-            <Text style={styles.legendText}>Restaurantes</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#45B7D1' }]} />
-            <Text style={styles.legendText}>Arte</Text>
-          </View>
-        </View>
+      {/* Barra inferior de navegación */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItem}>
+          <Text style={styles.navText}>Explore</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <Text style={styles.navText}>Near</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <Text style={styles.navText}>Pay</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <Text style={styles.navText}>Favorite</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <Text style={styles.navText}>Profile</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Acciones Rápidas */}
-      <View style={styles.quickActions}>
-        <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
-        <View style={styles.actionsRow}>
+      {/* Modal de información del vendedor */}
+      {selectedVendor && (
+        <View style={styles.vendorInfo}>
+          <Text style={styles.vendorName}>{selectedVendor.name}</Text>
+          <Text style={styles.vendorCategory}>{selectedVendor.category}</Text>
+          <Text style={styles.vendorRating}>⭐ {selectedVendor.rating}</Text>
           <TouchableOpacity 
-            style={styles.actionButton} 
-            onPress={() => Alert.alert('Buscar', 'Funcionalidad en desarrollo')}
+            style={styles.closeButton}
+            onPress={() => setSelectedVendor(null)}
           >
-            <Text style={styles.actionEmoji}>🔍</Text>
-            <Text style={styles.actionText}>Buscar</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton} 
-            onPress={() => Alert.alert('Favoritos', 'Tus lugares guardados')}
-          >
-            <Text style={styles.actionEmoji}>⭐</Text>
-            <Text style={styles.actionText}>Favoritos</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton} 
-            onPress={() => Alert.alert('Pedidos', 'Historial de pedidos')}
-          >
-            <Text style={styles.actionEmoji}>📋</Text>
-            <Text style={styles.actionText}>Pedidos</Text>
+            <Text style={styles.closeButtonText}>Cerrar</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      )}
+
+      {/* Mostrar mensaje de error si hay */}
+      {errorMsg && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        </View>
+      )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
     backgroundColor: '#fff',
-    padding: 20,
-    paddingTop: 50,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  welcome: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-  },
-  role: {
-    fontSize: 16,
-    color: '#666',
-  },
-  location: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 2,
-  },
-  mapContainer: {
-    flex: 1,
-    margin: 15,
-    borderRadius: 15,
-    overflow: 'hidden',
   },
   map: {
     width: '100%',
     height: '100%',
   },
-  legend: {
-    backgroundColor: '#fff',
-    marginHorizontal: 15,
-    padding: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  legendTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  legendItems: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  quickActions: {
-    backgroundColor: '#fff',
-    margin: 15,
-    padding: 20,
+  searchContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: 'white',
     borderRadius: 15,
+    padding: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  actionButton: {
-    alignItems: 'center',
-    padding: 10,
-  },
-  actionEmoji: {
+  searchTitle: {
     fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 5,
   },
-  actionText: {
-    fontSize: 12,
+  searchSubtitle: {
+    fontSize: 16,
     color: '#666',
-    fontWeight: '500',
+    marginBottom: 15,
+  },
+  categoriesContainer: {
+    marginBottom: 10,
+  },
+  categoryItem: {
+    paddingVertical: 5,
+  },
+  categoryText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginVertical: 5,
+  },
+  bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    zIndex: 1000,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  navText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  vendorInfo: {
+    position: 'absolute',
+    bottom: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1001,
+  },
+  vendorName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  vendorCategory: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  vendorRating: {
+    fontSize: 14,
+    color: '#ff9500',
+    marginBottom: 10,
+  },
+  closeButton: {
+    backgroundColor: '#007AFF',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  errorContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: '#ff6b6b',
+    padding: 10,
+    borderRadius: 8,
+    zIndex: 1001,
+  },
+  errorText: {
+    color: 'white',
+    textAlign: 'center',
   },
 });
-
-export default HomeScreenClient;
