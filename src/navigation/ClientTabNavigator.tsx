@@ -1,44 +1,31 @@
+// navigation/ClientTabNavigator.tsx
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { Text } from 'react-native';
+import FavoritesStoresScreen from '../screens/FavoritesStoresScreen';
 import HomeScreenClient from '../screens/HomeScreenClient';
+import NearStoresScreen from '../screens/NearStoresScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ScannQRScreen from '../screens/ScannQRScreen';
 import { ClientTabParamList } from './types';
 
-// Screens placeholder
-const NearStoresScreen = () => (
-  <Text style={{ textAlign: 'center', marginTop: 20 }}>Tiendas Cercanas - En desarrollo</Text>
-);
-
-const FavoritesStoresScreen = () => (
-  <Text style={{ textAlign: 'center', marginTop: 20 }}>Favoritos - En desarrollo</Text>
-);
-
 const Tab = createBottomTabNavigator<ClientTabParamList>();
 
-// Componente temporal para iconos de texto
+// Componente para iconos de texto
 const TextIcon = ({ emoji, focused }: { emoji: string, focused: boolean }) => (
   <Text style={{ fontSize: 20, color: focused ? '#6200ee' : '#999' }}>
     {emoji}
   </Text>
 );
 
-// Componente wrapper para ProfileScreen que pasa navigation y route
-const ProfileScreenWrapper = (props: any) => {
-  return <ProfileScreen {...props} />;
-};
-
-// Componente wrapper para HomeScreenClient
-const HomeScreenClientWrapper = (props: any) => {
-  return <HomeScreenClient {...props} />;
-};
+// Componentes wrapper para pasar props
+const HomeScreenClientWrapper = (props: any) => <HomeScreenClient {...props} />;
+const ProfileScreenWrapper = (props: any) => <ProfileScreen {...props} />;
+const NearStoresScreenWrapper = (props: any) => <NearStoresScreen {...props} />;
+const FavoritesStoresScreenWrapper = (props: any) => <FavoritesStoresScreen {...props} />;
 
 const ClientTabNavigator = ({ route }: any) => {
-  // Obtener el usuario de los parámetros de navegación
   const user = route?.params?.user;
-
-  console.log('👤 Usuario en ClientTabNavigator:', user);
 
   return (
     <Tab.Navigator
@@ -61,7 +48,7 @@ const ClientTabNavigator = ({ route }: any) => {
           fontWeight: 'bold',
         },
       }}
-      initialParams={{ user }} // Pasa el usuario como parámetro inicial a todos los screens
+      initialParams={{ user }}
     >
       <Tab.Screen
         name="Explore"
@@ -69,19 +56,15 @@ const ClientTabNavigator = ({ route }: any) => {
         initialParams={{ user }}
         options={{
           title: 'Explorar',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="🔍" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TextIcon emoji="🔍" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Near"
-        component={NearStoresScreen}
+        component={NearStoresScreenWrapper}
         options={{
           title: 'Cercanos',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="📍" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TextIcon emoji="📍" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -89,19 +72,15 @@ const ClientTabNavigator = ({ route }: any) => {
         component={ScannQRScreen}
         options={{
           title: 'Escanear',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="📷" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TextIcon emoji="📷" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Favorites"
-        component={FavoritesStoresScreen}
+        component={FavoritesStoresScreenWrapper}
         options={{
           title: 'Favoritos',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="⭐" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TextIcon emoji="⭐" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -110,9 +89,7 @@ const ClientTabNavigator = ({ route }: any) => {
         initialParams={{ user }}
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="👤" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TextIcon emoji="👤" focused={focused} />,
         }}
       />
     </Tab.Navigator>
