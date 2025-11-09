@@ -1,9 +1,9 @@
-import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState, useEffect } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { RootStackParamList } from '../navigation/types';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StackNavigationProp } from '@react-navigation/stack';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { RootStackParamList } from '../navigation/types';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'VendorTabs'>;
 
@@ -15,77 +15,69 @@ type Props = {
 const HomeScreenVendor = ({ navigation, route }: Props) => {
   const [user, setUser] = useState<any>(null);
   const [dashboardData, setDashboardData] = useState({
-    ventasHoy: 0,
-    totalHoy: 0,
-    totalProductos: 0
+    salesToday: 0,
+    totalToday: 0,
+    totalProducts: 0,
   });
 
   useEffect(() => {
-    cargarUsuario();
+    loadUser();
   }, []);
 
-  const cargarUsuario = async () => {
+  const loadUser = async () => {
     try {
-      console.log('🔍 Cargando usuario...');
       const userString = await AsyncStorage.getItem('currentUser');
-      console.log('📦 Datos de AsyncStorage:', userString);
-      
       if (userString) {
         const userData = JSON.parse(userString);
-        console.log('👤 Usuario cargado:', userData);
-        console.log('📝 Nombre:', userData.nombre);
-        console.log('📝 Descripción:', userData.descripcion);
         setUser(userData);
       }
     } catch (error) {
-      console.error('Error cargando usuario:', error);
+      console.error('Error loading user:', error);
     }
   };
 
   useEffect(() => {
-    if (user) {
-      cargarDashboard();
-    }
+    if (user) loadDashboard();
   }, [user]);
 
-  const cargarDashboard = async () => {
+  const loadDashboard = async () => {
     try {
       setDashboardData({
-        ventasHoy: user?.ventasRealizadas || 0,
-        totalHoy: user?.totalGanado || 0,
-        totalProductos: 42
+        salesToday: user?.ventasRealizadas || 0,
+        totalToday: user?.totalGanado || 0,
+        totalProducts: 42,
       });
     } catch (error) {
-      console.error('Error cargando dashboard:', error);
+      console.error('Error loading dashboard:', error);
     }
   };
 
   const handleLogout = async () => {
     Alert.alert(
-      'Cerrar Sesión',
-      '¿Estás seguro de que quieres cerrar sesión?',
+      'Log out',
+      'Are you sure you want to log out?',
       [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Sí, cerrar', 
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, log out',
           onPress: async () => {
             await AsyncStorage.removeItem('currentUser');
             navigation.navigate('Login');
-          }
+          },
         },
       ]
     );
   };
 
-  const handleCobrar = () => {
-    navigation.navigate('Cobrar' as any);
+  const handleCharge = () => {
+    navigation.navigate('MakeCount' as any);
   };
 
-  const handleAgregarProducto = () => {
+  const handleAddProduct = () => {
     navigation.navigate('Catalogue' as any);
   };
 
-  const handleHistorialVentas = () => {
+  const handleSalesHistory = () => {
     navigation.navigate('HistorialVentas' as any);
   };
 
@@ -94,87 +86,87 @@ const HomeScreenVendor = ({ navigation, route }: Props) => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.greeting}>
-          ¡Hola, {user?.nombre || 'Vendedor'}!
+          Hello, {user?.nombre || 'Vendor'}!
         </Text>
         <Text style={styles.subtitle}>
-          {user?.descripcion || 'Panel de Vendedor'}
+          {user?.descripcion || 'Vendor Dashboard'}
         </Text>
-        
+
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
+          <Text style={styles.logoutButtonText}>Log out</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Estadísticas del Día */}
+      {/* Daily Stats */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Estadísticas de Hoy</Text>
-        
+        <Text style={styles.sectionTitle}>Today’s Statistics</Text>
+
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, styles.transparentCard]}>
-            <MaterialIcons name="attach-money" size={24} color="#48bb78" />
-            <Text style={styles.statValue}>${dashboardData.totalHoy.toFixed(2)}</Text>
-            <Text style={styles.statLabel}>Dinero Obtenido</Text>
+          <View style={[styles.statCard]}>
+            <MaterialIcons name="attach-money" size={26} color="#4ecdc4" />
+            <Text style={styles.statValue}>${dashboardData.totalToday.toFixed(2)}</Text>
+            <Text style={styles.statLabel}>Total Earned</Text>
           </View>
 
-          <View style={[styles.statCard, styles.transparentCard]}>
-            <MaterialIcons name="shopping-cart" size={24} color="#667eea" />
-            <Text style={styles.statValue}>{dashboardData.ventasHoy}</Text>
-            <Text style={styles.statLabel}>Ventas Realizadas</Text>
+          <View style={[styles.statCard]}>
+            <MaterialIcons name="shopping-cart" size={26} color="#1a535c" />
+            <Text style={styles.statValue}>{dashboardData.salesToday}</Text>
+            <Text style={styles.statLabel}>Sales Made</Text>
           </View>
 
-          <View style={[styles.statCard, styles.transparentCard]}>
-            <MaterialIcons name="inventory" size={24} color="#ed8936" />
-            <Text style={styles.statValue}>{dashboardData.totalProductos}</Text>
-            <Text style={styles.statLabel}>Productos</Text>
+          <View style={[styles.statCard]}>
+            <MaterialIcons name="inventory" size={26} color="#ff6b6b" />
+            <Text style={styles.statValue}>{dashboardData.totalProducts}</Text>
+            <Text style={styles.statLabel}>Products</Text>
           </View>
         </View>
       </View>
 
-      {/* Accesos Rápidos */}
+      {/* Quick Access */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Accesos Rápidos</Text>
-        
+        <Text style={styles.sectionTitle}>Quick Access</Text>
+
         <View style={styles.quickAccessGrid}>
-          <TouchableOpacity style={styles.quickAccessItem} onPress={handleCobrar}>
+          <TouchableOpacity style={styles.quickAccessItem} onPress={handleCharge}>
             <View style={styles.quickAccessContent}>
-              <MaterialIcons name="payment" size={32} color="#667eea" />
-              <Text style={styles.quickAccessTitle}>Cobrar</Text>
-              <Text style={styles.quickAccessSubtitle}>Generar QR</Text>
+              <MaterialIcons name="qr-code" size={34} color="#4ecdc4" />
+              <Text style={styles.quickAccessTitle}>Charge</Text>
+              <Text style={styles.quickAccessSubtitle}>Generate QR</Text>
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.quickAccessItem} onPress={handleAgregarProducto}>
+          <TouchableOpacity style={styles.quickAccessItem} onPress={handleAddProduct}>
             <View style={styles.quickAccessContent}>
-              <MaterialIcons name="add-circle" size={32} color="#48bb78" />
-              <Text style={styles.quickAccessTitle}>Agregar</Text>
-              <Text style={styles.quickAccessSubtitle}>Nuevo Producto</Text>
+              <MaterialIcons name="add-circle" size={34} color="#1a535c" />
+              <Text style={styles.quickAccessTitle}>Add</Text>
+              <Text style={styles.quickAccessSubtitle}>New Product</Text>
             </View>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.historyButton} onPress={handleHistorialVentas}>
-          <MaterialIcons name="history" size={20} color="#4a5568" />
-          <Text style={styles.historyButtonText}>Historial de Ventas</Text>
+        <TouchableOpacity style={styles.historyButton} onPress={handleSalesHistory}>
+          <MaterialIcons name="history" size={20} color="#1a535c" />
+          <Text style={styles.historyButtonText}>Sales History</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Últimas Ventas */}
+      {/* Recent Sales */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Ventas Recientes</Text>
-        
+        <Text style={styles.sectionTitle}>Recent Sales</Text>
+
         <View style={styles.salesList}>
           <View style={styles.saleItem}>
             <View style={styles.saleInfo}>
-              <Text style={styles.saleProduct}>Huipil bordado</Text>
-              <Text style={styles.saleTime}>Hace 10 min</Text>
+              <Text style={styles.saleProduct}>Embroidered Huipil</Text>
+              <Text style={styles.saleTime}>10 min ago</Text>
             </View>
             <Text style={styles.saleAmount}>$450</Text>
           </View>
-          
+
           <View style={styles.saleItem}>
             <View style={styles.saleInfo}>
               <Text style={styles.saleProduct}>Alebrijes x2</Text>
-              <Text style={styles.saleTime}>Hace 1 hora</Text>
+              <Text style={styles.saleTime}>1 hour ago</Text>
             </View>
             <Text style={styles.saleAmount}>$200</Text>
           </View>
@@ -184,30 +176,31 @@ const HomeScreenVendor = ({ navigation, route }: Props) => {
   );
 };
 
-// Los estilos se mantienen igual...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f8fdfb',
   },
   header: {
-    backgroundColor: '#667eea',
+    backgroundColor: '#ffffff',
     padding: 20,
     paddingTop: 50,
+    borderBottomWidth: 2,
+    borderBottomColor: '#c1f9e1',
   },
   greeting: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1a535c',
     marginBottom: 5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#e2e8f0',
+    color: '#4ecdc4',
     marginBottom: 15,
   },
   logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#ff6b6b',
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
@@ -219,49 +212,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     margin: 15,
     padding: 20,
     borderRadius: 12,
-    shadowColor: '#000',
+    borderWidth: 1.5,
+    borderColor: '#c1f9e1',
+    shadowColor: '#1a535c',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#2d3748',
+    color: '#1a535c',
     marginBottom: 15,
   },
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
   },
   statCard: {
     flex: 1,
     alignItems: 'center',
     padding: 15,
-    borderRadius: 12,
     marginHorizontal: 5,
+    borderRadius: 12,
+    backgroundColor: '#f8fdfb',
     borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.5)',
-  },
-  transparentCard: {
-    backgroundColor: 'rgba(247, 250, 252, 0.7)',
+    borderColor: '#c1f9e1',
   },
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#2d3748',
+    color: '#1a535c',
     marginVertical: 5,
   },
   statLabel: {
     fontSize: 12,
-    color: '#718096',
-    textAlign: 'center',
+    color: '#95a5a6',
   },
   quickAccessGrid: {
     flexDirection: 'row',
@@ -270,12 +261,12 @@ const styles = StyleSheet.create({
   },
   quickAccessItem: {
     flex: 1,
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#f8fdfb',
     padding: 20,
     borderRadius: 12,
     marginHorizontal: 5,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#c1f9e1',
     alignItems: 'center',
   },
   quickAccessContent: {
@@ -284,29 +275,26 @@ const styles = StyleSheet.create({
   quickAccessTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2d3748',
+    color: '#1a535c',
     marginTop: 8,
     marginBottom: 4,
   },
   quickAccessSubtitle: {
     fontSize: 12,
-    color: '#718096',
-    textAlign: 'center',
+    color: '#95a5a6',
   },
   historyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#4ecdc4',
     padding: 15,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
   historyButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4a5568',
+    color: '#ffffff',
     marginLeft: 8,
   },
   salesList: {
@@ -318,7 +306,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#c1f9e1',
   },
   saleInfo: {
     flex: 1,
@@ -326,17 +314,17 @@ const styles = StyleSheet.create({
   saleProduct: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2d3748',
+    color: '#1a535c',
     marginBottom: 4,
   },
   saleTime: {
     fontSize: 12,
-    color: '#718096',
+    color: '#95a5a6',
   },
   saleAmount: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#48bb78',
+    color: '#4ecdc4',
   },
 });
 
