@@ -1,117 +1,153 @@
+import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
-import { Text } from 'react-native';
+import FavoritesStoresScreen from '../screens/FavoritesStoresScreen';
 import HomeScreenClient from '../screens/HomeScreenClient';
+import NearStoresScreen from '../screens/NearStoresScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ScannQRScreen from '../screens/ScannQRScreen';
 import { ClientTabParamList } from './types';
 
-// Screens placeholder
-const NearStoresScreen = () => (
-  <Text style={{ textAlign: 'center', marginTop: 20 }}>Tiendas Cercanas - En desarrollo</Text>
-);
-
-const FavoritesStoresScreen = () => (
-  <Text style={{ textAlign: 'center', marginTop: 20 }}>Favoritos - En desarrollo</Text>
-);
-
 const Tab = createBottomTabNavigator<ClientTabParamList>();
 
-// Componente temporal para iconos de texto
-const TextIcon = ({ emoji, focused }: { emoji: string, focused: boolean }) => (
-  <Text style={{ fontSize: 20, color: focused ? '#6200ee' : '#999' }}>
-    {emoji}
-  </Text>
-);
-
-// Componente wrapper para ProfileScreen que pasa navigation y route
-const ProfileScreenWrapper = (props: any) => {
-  return <ProfileScreen {...props} />;
-};
-
-// Componente wrapper para HomeScreenClient
-const HomeScreenClientWrapper = (props: any) => {
-  return <HomeScreenClient {...props} />;
-};
-
 const ClientTabNavigator = ({ route }: any) => {
-  // Obtener el usuario de los parámetros de navegación
   const user = route?.params?.user;
-
-  console.log('👤 Usuario en ClientTabNavigator:', user);
 
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: '#6200ee',
-        tabBarInactiveTintColor: '#999',
+        tabBarActiveTintColor: '#4ecdc4',
+        tabBarInactiveTintColor: '#95a5a6',
         tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#f0f0f0',
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+          backgroundColor: '#ffffff',
+          borderTopWidth: 2,
+          borderTopColor: '#c1f9e1',
+          height: 65,
+          paddingBottom: 10,
+          paddingTop: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 10,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
         },
         headerStyle: {
-          backgroundColor: '#6200ee',
+          backgroundColor: '#ffffff',
+          borderBottomWidth: 2,
+          borderBottomColor: '#c1f9e1',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 4,
         },
-        headerTintColor: '#fff',
+        headerTintColor: '#1a535c',
         headerTitleStyle: {
           fontWeight: 'bold',
+          fontSize: 20,
         },
+        headerTitleAlign: 'center',
       }}
-      initialParams={{ user }} // Pasa el usuario como parámetro inicial a todos los screens
+      initialParams={{ user }}
     >
       <Tab.Screen
         name="Explore"
-        component={HomeScreenClientWrapper}
+        component={HomeScreenClient}
         initialParams={{ user }}
         options={{
           title: 'Explorar',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="🔍" focused={focused} />
+          headerShown: false,
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons 
+              name={focused ? 'map' : 'map-outline'} 
+              size={size} 
+              color={focused ? '#4ecdc4' : '#95a5a6'} 
+            />
           ),
         }}
       />
       <Tab.Screen
         name="Near"
         component={NearStoresScreen}
+        initialParams={{ user }}
         options={{
           title: 'Cercanos',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="📍" focused={focused} />
+          headerStyle: {
+            backgroundColor: '#ffffff',
+            borderBottomWidth: 2,
+            borderBottomColor: '#c1f9e1',
+          },
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons 
+              name={focused ? 'location' : 'location-outline'} 
+              size={size} 
+              color={focused ? '#4ecdc4' : '#95a5a6'} 
+            />
           ),
         }}
       />
       <Tab.Screen
         name="Scann"
         component={ScannQRScreen}
+        initialParams={{ user }}
         options={{
           title: 'Escanear',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="📷" focused={focused} />
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons 
+              name={focused ? 'qr-code' : 'qr-code-outline'} 
+              size={size + 4} 
+              color={focused ? '#ff6b6b' : '#95a5a6'} 
+            />
           ),
+          tabBarActiveTintColor: '#ff6b6b',
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '600',
+          },
         }}
       />
       <Tab.Screen
         name="Favorites"
         component={FavoritesStoresScreen}
+        initialParams={{ user }}
         options={{
           title: 'Favoritos',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="⭐" focused={focused} />
+          headerStyle: {
+            backgroundColor: '#ffffff',
+            borderBottomWidth: 2,
+            borderBottomColor: '#c1f9e1',
+          },
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons 
+              name={focused ? 'heart' : 'heart-outline'} 
+              size={size} 
+              color={focused ? '#ff6b6b' : '#95a5a6'} 
+            />
           ),
+          tabBarActiveTintColor: '#ff6b6b',
         }}
       />
       <Tab.Screen
         name="ProfileClient"
-        component={ProfileScreenWrapper}
+        component={ProfileScreen}
         initialParams={{ user }}
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ focused }) => (
-            <TextIcon emoji="👤" focused={focused} />
+          headerStyle: {
+            backgroundColor: '#ffffff',
+            borderBottomWidth: 2,
+            borderBottomColor: '#c1f9e1',
+          },
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons 
+              name={focused ? 'person' : 'person-outline'} 
+              size={size} 
+              color={focused ? '#4ecdc4' : '#95a5a6'} 
+            />
           ),
         }}
       />
