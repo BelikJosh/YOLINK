@@ -1,190 +1,96 @@
-// src/screens/NearStoresScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import {
-  Alert,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-interface Vendor {
-  id: string;
-  name: string;
-  category: string;
-  location: {
-    latitude: number;
-    longitude: number;
-  };
-  rating: number;
-  description?: string;
-  horario?: {
-    apertura: string;
-    cierre: string;
-    dias: string[];
-  };
-  telefono?: string;
-  direccion?: string;
-  distance?: number;
-}
-
-const NearStoresScreen = ({ route, navigation }: any) => {
-  const { nearbyVendors = [], userLocation } = route.params || {};
-
-  const handleVendorPress = (vendor: Vendor) => {
-    Alert.alert(
-      vendor.name,
-      `Distancia: ${vendor.distance?.toFixed(1)} km\n\n${vendor.description || 'Sin descripción'}`,
-      [
-        { text: 'Cerrar', style: 'cancel' },
-        { 
-          text: 'Ver en mapa', 
-          onPress: () => {
-            console.log('Navegando a Explore con vendedor:', vendor.name);
-            // Navegar de vuelta al tab de Explore con el vendedor seleccionado
-            navigation.navigate('Explore', { 
-              vendorToFocus: vendor 
-            });
-          }
-        }
-      ]
-    );
-  };
-
-  const renderVendorItem = ({ item }: { item: Vendor }) => (
-    <TouchableOpacity 
-      style={styles.vendorItem}
-      onPress={() => handleVendorPress(item)}
-    >
-      <View style={styles.vendorInfo}>
-        <Text style={styles.vendorName}>{item.name}</Text>
-        <Text style={styles.vendorCategory}>{item.category}</Text>
-        <Text style={styles.vendorDetails}>
-          ⭐ {item.rating} • {item.distance?.toFixed(1)} km
-        </Text>
-        {item.direccion && (
-          <Text style={styles.vendorAddress}>
-            <Ionicons name="location" size={12} color="#666" /> {item.direccion}
-          </Text>
-        )}
-        {item.horario && (
-          <Text style={styles.vendorSchedule}>
-            <Ionicons name="time" size={12} color="#666" /> {item.horario.apertura} - {item.horario.cierre}
-          </Text>
-        )}
-      </View>
-      <Ionicons name="chevron-forward" size={20} color="#666" />
-    </TouchableOpacity>
-  );
+const NearStoresScreen = ({ navigation }: any) => {
+  const stores = [
+    {
+      id: '1',
+      name: 'Café Central',
+      address: 'Av. Reforma 123, CDMX',
+      latitude: 19.4326,
+      longitude: -99.1332,
+    },
+    {
+      id: '2',
+      name: 'Panadería del Sol',
+      address: 'Calle 45 #10, CDMX',
+      latitude: 19.4356,
+      longitude: -99.1402,
+    },
+  ];
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Tiendas Cercanas</Text>
-      <Text style={styles.subtitle}>
-        {nearbyVendors.length} tiendas encontradas cerca de ti
-      </Text>
-      
-      {nearbyVendors.length > 0 ? (
-        <FlatList
-          data={nearbyVendors}
-          renderItem={renderVendorItem}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          style={styles.list}
-        />
-      ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="location" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No hay tiendas cercanas</Text>
-          <Text style={styles.emptySubtext}>
-            Intenta aumentar el radio de búsqueda o verifica tu conexión a internet
-          </Text>
-        </View>
-      )}
+      <Text style={styles.header}>Tiendas Cercanas</Text>
+      <FlatList
+        data={stores}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.address}>{item.address}</Text>
+
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={styles.routeButton}
+                onPress={() => navigation.navigate('Explore', { store: item })}
+              >
+                <Ionicons name="navigate" size={18} color="#fff" />
+                <Text style={styles.btnText}>Trazar Ruta</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.favoriteButton}
+                onPress={() => navigation.navigate('Favorites', { store: item })}
+              >
+                <Ionicons name="heart" size={18} color="#fff" />
+                <Text style={styles.btnText}>Agregar a Favoritos</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
-  },
-  list: {
-    flex: 1,
-  },
-  vendorItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#f8f9fa',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-  },
-  vendorInfo: {
-    flex: 1,
-  },
-  vendorName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  vendorCategory: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  vendorDetails: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  vendorAddress: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 2,
-  },
-  vendorSchedule: {
-    fontSize: 12,
-    color: '#666',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-});
-
 export default NearStoresScreen;
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f7fff7', padding: 10 },
+  header: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a535c',
+    textAlign: 'center',
+    marginVertical: 10,
+  },
+  card: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+    elevation: 4,
+  },
+  name: { fontSize: 16, fontWeight: 'bold', color: '#1a535c' },
+  address: { fontSize: 14, color: '#4f6367', marginBottom: 10 },
+  actions: { flexDirection: 'row', justifyContent: 'space-between' },
+  routeButton: {
+    flexDirection: 'row',
+    backgroundColor: '#4ecdc4',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    gap: 6,
+  },
+  favoriteButton: {
+    flexDirection: 'row',
+    backgroundColor: '#ff6b6b',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    gap: 6,
+  },
+  btnText: { color: '#fff', fontWeight: '600' },
+});

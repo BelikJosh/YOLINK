@@ -4,7 +4,7 @@ import React from 'react';
 import FavoritesStoresScreen from '../screens/FavoritesStoresScreen';
 import HomeScreenClient from '../screens/HomeScreenClient';
 import NearStoresScreen from '../screens/NearStoresScreen';
-import ProfileScreenClient from '../screens/ProfileScreenClient'; // Cambia esta importación
+import ProfileScreenClient from '../screens/ProfileScreenClient';
 import ScannQRScreen from '../screens/ScannQRScreen';
 import { ClientTabParamList } from './types';
 
@@ -76,11 +76,6 @@ const ClientTabNavigator = ({ route }: any) => {
         initialParams={{ user }}
         options={{
           title: 'Cercanos',
-          headerStyle: {
-            backgroundColor: '#ffffff',
-            borderBottomWidth: 2,
-            borderBottomColor: '#c1f9e1',
-          },
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
               name={focused ? 'location' : 'location-outline'} 
@@ -104,10 +99,6 @@ const ClientTabNavigator = ({ route }: any) => {
             />
           ),
           tabBarActiveTintColor: '#ff6b6b',
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '600',
-          },
         }}
       />
       <Tab.Screen
@@ -116,11 +107,6 @@ const ClientTabNavigator = ({ route }: any) => {
         initialParams={{ user }}
         options={{
           title: 'Favoritos',
-          headerStyle: {
-            backgroundColor: '#ffffff',
-            borderBottomWidth: 2,
-            borderBottomColor: '#c1f9e1',
-          },
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
               name={focused ? 'heart' : 'heart-outline'} 
@@ -133,15 +119,10 @@ const ClientTabNavigator = ({ route }: any) => {
       />
       <Tab.Screen
         name="ProfileClient"
-        component={ProfileScreenClient} // Cambia a ProfileScreenClient
+        component={ProfileScreenClient}
         initialParams={{ user }}
         options={{
           title: 'Perfil',
-          headerStyle: {
-            backgroundColor: '#ffffff',
-            borderBottomWidth: 2,
-            borderBottomColor: '#c1f9e1',
-          },
           tabBarIcon: ({ focused, size }) => (
             <Ionicons 
               name={focused ? 'person' : 'person-outline'} 
