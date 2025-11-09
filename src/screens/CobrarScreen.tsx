@@ -1,20 +1,20 @@
 // screens/CobrarScreen.tsx
-import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useIsFocused } from '@react-navigation/native'; // IMPORTANTE: Agrega esto
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  ActivityIndicator,
   Alert,
-  ActivityIndicator
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { productoService } from '../services/productoService';
 import { ventaService } from '../services/ventaService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import QRCode from 'react-native-qrcode-svg';
-import { useIsFocused } from '@react-navigation/native'; // IMPORTANTE: Agrega esto
 
 interface ProductoSeleccionado {
   producto: any;
@@ -122,7 +122,7 @@ const agregarProducto = (producto: any) => {
     return productosSeleccionados.reduce((total, item) => total + item.subtotal, 0);
   };
 
-  // En CobrarScreen.tsx, en la función generarQR, reemplaza esta parte:
+// screens/CobrarScreen.tsx (SOLO FUNCIÓN generarQR ACTUALIZADA)
 const generarQR = async () => {
   if (productosSeleccionados.length === 0) {
     Alert.alert('Error', 'Selecciona al menos un producto');
@@ -132,49 +132,59 @@ const generarQR = async () => {
   setGenerandoQR(true);
 
   try {
-    // Crear objeto de venta CON la propiedad qrCode
-    const venta = {
-      id: `venta_${Date.now()}`,
-      vendedorId: user.id,
-      productos: productosSeleccionados.map(item => ({
-        productoId: item.producto.id,
-        nombre: item.producto.nombre,
-        precio: item.producto.precio,
-        cantidad: item.cantidad,
-        subtotal: item.subtotal
-      })),
-      total: calcularTotal(),
-      fecha: new Date().toISOString(),
-      estado: 'pendiente' as const,
-      qrCode: '' // Inicializar como string vacío
-    };
+    const total = calcularTotal();
+    const productsData = productosSeleccionados.map(item => ({
+      productoId: item.producto.id,
+      nombre: item.producto.nombre,
+      precio: item.producto.precio,
+      cantidad: item.cantidad,
+      subtotal: item.subtotal
+    }));
 
-    // Generar QR en base64
-    const qrData = JSON.stringify({
-      ventaId: venta.id,
-      vendedorId: user.id,
-      total: venta.total,
-      productos: venta.productos
+    // Llamar al backend para generar QR REAL con OpenPayments
+    const response = await fetch('http://192.168.14.168:3001/op/generate-payment-qr', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: total,
+        description: `Compra de ${productosSeleccionados.length} productos`,
+        vendorName: user?.nombre || 'Vendedor YOLINK'
+      })
     });
 
-    // En una app real, aquí generarías el QR y lo convertirías a base64
-    const qrBase64 = `data:image/png;base64,simulated_qr_code_${btoa(qrData)}`;
-    
-    // Actualizar la venta con el QR generado
-    venta.qrCode = qrBase64;
-    
-    // Guardar venta en DynamoDB
-    const exito = await ventaService.crearVenta(venta);
+    const result = await response.json();
 
-    if (exito) {
-      setQrCode(qrBase64);
-      Alert.alert('Éxito', 'QR generado correctamente');
+    if (result.ok) {
+      setQrData(result.paymentData);
+      
+      // Guardar venta en base de datos
+      const venta = {
+        id: `venta_${Date.now()}`,
+        vendedorId: user.id,
+        productos: productsData,
+        total: total,
+        fecha: new Date().toISOString(),
+        estado: 'pendiente',
+        qrData: result.paymentData,
+        incomingPaymentId: result.incomingPayment.id // Guardar referencia
+      };
+
+      const exito = await ventaService.crearVenta(venta);
+
+      if (exito) {
+        Alert.alert('✅ Éxito', 'QR de pago generado correctamente');
+        console.log('💰 Incoming Payment creado:', result.incomingPayment.id);
+      } else {
+        Alert.alert('Error', 'QR generado pero no se pudo guardar la venta');
+      }
     } else {
-      Alert.alert('Error', 'No se pudo guardar la venta');
+      Alert.alert('Error', result.error || 'No se pudo generar el QR de pago');
     }
   } catch (error) {
     console.error('Error generando QR:', error);
-    Alert.alert('Error', 'No se pudo generar el QR');
+    Alert.alert('Error', 'No se pudo conectar con el servidor de pagos');
   } finally {
     setGenerandoQR(false);
   }
