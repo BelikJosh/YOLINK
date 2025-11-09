@@ -56,6 +56,33 @@ const handleLogin = async () => {
 } else {
   navigation.navigate('ClientTabs', { user: result.user });
 }
+      if (result.success && result.user) {
+        // Crear objeto user con los datos del resultado
+        const user = {
+          id: result.user.id,
+          name: result.user.nombre,
+          email: result.user.email,
+          role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
+          userType: result.user.userType,
+          ...result.user // Esto incluye todos los campos adicionales
+        };
+
+        console.log('✅ Login exitoso, guardando usuario...', result.user);
+        
+        // GUARDAR EN ASYNC STORAGE
+        await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
+        console.log('💾 Usuario guardado en AsyncStorage');
+
+        Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
+
+        // Navegar al tab correspondiente según el tipo de usuario
+        if (result.user.userType === 'client' || result.user.userType === 'cliente') {
+          navigation.navigate('ClientTabs', { user });
+        } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
+          navigation.navigate('VendorTabs', { user });
+        } else {
+          navigation.navigate('ClientTabs', { user });
+        }
 
     } else {
       Alert.alert('Error', result.error || 'Credenciales incorrectas');
@@ -150,6 +177,7 @@ const handleLogin = async () => {
   );
 };
 
+// Los estilos se mantienen igual...
 const styles = StyleSheet.create({
   container: {
     flex: 1,

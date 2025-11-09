@@ -47,14 +47,14 @@ const AppNavigator = () => {
           headerShown: true,
         }}
       />
-      <Stack.Screen 
-        name="ClientTabs" 
-        component={ClientTabNavigator}
-        options={{ 
-          headerShown: false,
-          title: 'Explorar'
-        }}
-      />
+<Stack.Screen 
+  name="ClientTabs" 
+  component={ClientTabNavigator}
+  options={{ 
+    headerShown: false,
+    title: 'Explorar'
+  }}
+/>
       <Stack.Screen 
         name="VendorTabs" 
         component={VendorTabNavigator}

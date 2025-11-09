@@ -16,7 +16,7 @@ export type ClientTabParamList = {
   Near: undefined;
   Scann: undefined;
   Favorites: undefined;
-  ProfileClient: undefined;
+  ProfileClient: { user?: any }; // Añade user como parámetro opcional
 };
 
 export type VendorTabParamList = {
