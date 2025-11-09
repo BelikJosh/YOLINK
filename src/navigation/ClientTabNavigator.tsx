@@ -1,12 +1,42 @@
+// src/navigation/ClientTabNavigator.tsx - VERSIÓN CORREGIDA
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import React from 'react';
 import FavoritesStoresScreen from '../screens/FavoritesStoresScreen';
 import HomeScreenClient from '../screens/HomeScreenClient';
 import NearStoresScreen from '../screens/NearStoresScreen';
+import PaymentWebViewScreen from '../screens/PaymentWebViewScreen';
 import ProfileScreenClient from '../screens/ProfileScreenClient';
 import ScannQRScreen from '../screens/ScannQRScreen';
 import { ClientTabParamList } from './types';
+
+// Crear Stack Navigator para la sección Scann
+const ScannStack = createStackNavigator();
+
+const ScannStackNavigator = () => (
+  <ScannStack.Navigator>
+    <ScannStack.Screen 
+      name="ScannMain" 
+      component={ScannQRScreen}
+      options={{ 
+        headerShown: false 
+      }}
+    />
+    <ScannStack.Screen 
+      name="PaymentWebView" 
+      component={PaymentWebViewScreen}
+      options={{ 
+        headerShown: true,
+        title: 'Autorizar Pago',
+        headerStyle: {
+          backgroundColor: '#ffffff',
+        },
+        headerTintColor: '#1a535c',
+      }}
+    />
+  </ScannStack.Navigator>
+);
 
 const Tab = createBottomTabNavigator<ClientTabParamList>();
 
@@ -85,9 +115,10 @@ const ClientTabNavigator = ({ route }: any) => {
           ),
         }}
       />
+      {/* Cambiar: Usar ScannStackNavigator en lugar de ScannQRScreen directamente */}
       <Tab.Screen
         name="Scann"
-        component={ScannQRScreen}
+        component={ScannStackNavigator}
         initialParams={{ user }}
         options={{
           title: 'Pay',
@@ -99,6 +130,7 @@ const ClientTabNavigator = ({ route }: any) => {
             />
           ),
           tabBarActiveTintColor: '#ff6b6b',
+          headerShown: false,
         }}
       />
       <Tab.Screen

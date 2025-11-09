@@ -3,8 +3,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, StyleSheet, View } from 'react-native';
-import AppNavigator from './src/navigation/Appnavigator';
 import { AuthProvider } from './src/context/AuthContext';
+import AppNavigator from './src/navigation/Appnavigator';
 // Previene que el splash nativo se oculte automáticamente
 SplashScreen.preventAutoHideAsync();
 
