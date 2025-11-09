@@ -5,22 +5,16 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  Image
+  TouchableOpacity
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { paymentService } from '../services/paymentService'; // NUEVO SERVICIO
 import { productoService } from '../services/productoService';
 import { ventaService } from '../services/ventaService';
-import { paymentService } from '../services/paymentService'; // NUEVO SERVICIO
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useIsFocused } from '@react-navigation/native';
-import axios from 'axios';
 
 interface ProductoSeleccionado {
   producto: any;

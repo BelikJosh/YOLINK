@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
 import {
@@ -25,7 +26,8 @@ type RootStackParamList = {
       lng: number;
     }) => void;
   };
-  Home: { user: any };
+  ClientTabs: { user: any };
+  VendorTabs: { user: any };
 };
 
 type CreateAccountScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CreateAccount'>;
@@ -44,9 +46,9 @@ interface FormData {
   categoria: string;
   direccion: string;
   descripcion: string;
-  lat: string;
-  lng: string;
-  intereses: string;
+  lat: number;
+  lng: number;
+  intereses: string[];
 }
 
 const CreateAccount: React.FC<Props> = ({ navigation }) => {
@@ -61,19 +63,30 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
     categoria: '',
     direccion: '',
     descripcion: '',
-    lat: '19.4326',
-    lng: '-99.1332',
-    intereses: 'historia,arte,gastronomía'
+    lat: 19.4326,
+    lng: -99.1332,
+    intereses: []
   });
 
   const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
 
-  const handleInputChange = (field: keyof FormData, value: string) => {
+  const availableInterests = ['History', 'Art', 'Food', 'Shopping', 'Culture', 'Nature'];
+
+  const handleInputChange = (field: keyof FormData, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
+    }));
+  };
+
+  const toggleInterest = (interest: string) => {
+    setFormData(prev => ({
+      ...prev,
+      intereses: prev.intereses.includes(interest)
+        ? prev.intereses.filter(i => i !== interest)
+        : [...prev.intereses, interest]
     }));
   };
 
@@ -87,33 +100,33 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
 
   const validateStep1 = (): boolean => {
     if (!formData.nombre.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu nombre completo');
+      Alert.alert('Required Field', 'Please enter your full name');
       return false;
     }
 
     if (!formData.email.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu correo electrónico');
+      Alert.alert('Required Field', 'Please enter your email address');
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      Alert.alert('Error', 'Por favor ingresa un correo electrónico válido');
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
       return false;
     }
 
     if (!formData.contraseña) {
-      Alert.alert('Error', 'Por favor ingresa una contraseña');
+      Alert.alert('Required Field', 'Please enter a password');
       return false;
     }
 
     if (formData.contraseña.length < 6) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      Alert.alert('Weak Password', 'Password must be at least 6 characters long');
       return false;
     }
 
     if (formData.contraseña !== formData.confirmarContraseña) {
-      Alert.alert('Error', 'Las contraseñas no coinciden');
+      Alert.alert('Error', 'Passwords do not match');
       return false;
     }
 
@@ -132,11 +145,13 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
       setCurrentStep(2);
     } else if (currentStep === 2) {
       setCurrentStep(1);
+    } else {
+      navigation.goBack();
     }
   };
 
   const generateUserId = (): string => {
-    const prefix = formData.userType === 'vendor' ? 'Vendedor' : 'Cliente';
+    const prefix = formData.userType === 'vendor' ? 'VENDOR' : 'CLIENT';
     const timestamp = Date.now();
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     return `${prefix}#${timestamp}${randomNum}`;
@@ -148,8 +163,8 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
         setFormData(prev => ({
           ...prev,
           direccion: location.address,
-          lat: location.lat.toString(),
-          lng: location.lng.toString()
+          lat: location.lat,
+          lng: location.lng
         }));
       }
     });
@@ -158,11 +173,11 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
   const handleSubmit = async () => {
     if (formData.userType === 'vendor') {
       if (!formData.categoria.trim()) {
-        Alert.alert('Error', 'Por favor ingresa la categoría de tu negocio');
+        Alert.alert('Required Field', 'Please enter your business category');
         return;
       }
       if (!formData.direccion.trim()) {
-        Alert.alert('Error', 'Por favor selecciona la ubicación de tu negocio');
+        Alert.alert('Required Field', 'Please select your business location');
         return;
       }
     }
@@ -172,7 +187,7 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
     try {
       const emailExists = await dynamoDBService.checkEmailExists(formData.email);
       if (emailExists) {
-        Alert.alert('Error', 'Este correo electrónico ya está registrado');
+        Alert.alert('Email In Use', 'This email address is already registered');
         setLoading(false);
         return;
       }
@@ -185,6 +200,7 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
         nombre: formData.nombre,
         email: formData.email,
         password: formData.contraseña,
+        telefono: formData.telefono,
         walletOpenPay: `wallet_${formData.userType}_${Date.now()}`,
         fechaRegistro: new Date().toISOString(),
         rating: 0,
@@ -198,27 +214,26 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
           categoria: formData.categoria,
           ubicacion: {
             direccion: formData.direccion,
-            lat: parseFloat(formData.lat) || 19.4326,
-            lng: parseFloat(formData.lng) || -99.1332
+            lat: formData.lat,
+            lng: formData.lng
           },
           horario: {
-            apertura: '08:00',
-            cierre: '22:00',
-            dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+            apertura: '09:00',
+            cierre: '18:00',
+            dias: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
           },
-          telefono: formData.telefono,
-          descripcion: formData.descripcion
+          descripcion: formData.descripcion || 'Local business'
         });
       } else {
         Object.assign(userData, {
           comprasRealizadas: 0,
           totalGastado: 0,
           ubicacionActual: {
-            lat: parseFloat(formData.lat) || 19.4326,
-            lng: parseFloat(formData.lng) || -99.1332
+            lat: formData.lat,
+            lng: formData.lng
           },
           preferencias: {
-            intereses: formData.intereses.split(',').map(i => i.trim()),
+            intereses: formData.intereses.length > 0 ? formData.intereses : ['History', 'Art', 'Food'],
             radioBusqueda: 5
           }
         });
@@ -228,75 +243,84 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
 
       if (result.success) {
         Alert.alert(
-          '¡Cuenta Creada!', 
-          `✅ Tu cuenta se ha creado exitosamente\n\nBienvenido a YOLINK`,
+          'Account Created',
+          'Your account has been created successfully',
           [
             {
-              text: 'Ir al Login',
+              text: 'Go to Login',
               onPress: () => navigation.navigate('Login')
             }
           ]
         );
         
-        console.log('📋 DATOS GUARDADOS:', JSON.stringify(userData, null, 2));
-        
+        console.log('User created:', JSON.stringify(userData, null, 2));
       } else {
-        Alert.alert('Error', `❌ Error al crear la cuenta: ${result.error}`);
+        Alert.alert('Error', `Could not create account: ${result.error}`);
       }
     } catch (error) {
-      Alert.alert('Error', '❌ Error al conectar con la base de datos');
+      Alert.alert('Error', 'Error connecting to database');
       console.error('Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // PASO 1: Información Personal
+  // STEP 1: Personal Information
   const renderStep1 = () => (
     <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
-        <Text style={styles.title}>✨ Crear Cuenta</Text>
-        <Text style={styles.subtitle}>Cuéntanos sobre ti</Text>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressSegment, styles.progressActive]} />
-          <View style={styles.progressSegment} />
-          <View style={styles.progressSegment} />
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <Ionicons name="arrow-back" size={24} color="#1a535c" />
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Step 1 of 3</Text>
         </View>
+      </View>
+
+      <View style={styles.progressBar}>
+        <View style={[styles.progressSegment, styles.progressActive]} />
+        <View style={styles.progressSegment} />
+        <View style={styles.progressSegment} />
       </View>
 
       <View style={styles.formSection}>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nombre Completo</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.nombre}
-            onChangeText={(value) => handleInputChange('nombre', value)}
-            placeholder="Ej: María González"
-            placeholderTextColor="#95a5a6"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Correo Electrónico</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.email}
-            onChangeText={(value) => handleInputChange('email', value)}
-            placeholder="tucorreo@ejemplo.com"
-            placeholderTextColor="#95a5a6"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Teléfono</Text>
-          <View style={styles.phoneContainer}>
-            <View style={styles.countryCode}>
-              <Text style={styles.countryCodeText}>🇲🇽 +52</Text>
-            </View>
+          <Text style={styles.label}>Full Name</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={20} color="#4ecdc4" style={styles.inputIcon} />
             <TextInput
-              style={[styles.input, styles.phoneInput]}
+              style={styles.input}
+              value={formData.nombre}
+              onChangeText={(value) => handleInputChange('nombre', value)}
+              placeholder="e.g., Maria Gonzalez"
+              placeholderTextColor="#95a5a6"
+            />
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email Address</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail-outline" size={20} color="#4ecdc4" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              value={formData.email}
+              onChangeText={(value) => handleInputChange('email', value)}
+              placeholder="youremail@example.com"
+              placeholderTextColor="#95a5a6"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone Number</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="call-outline" size={20} color="#4ecdc4" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
               value={formData.telefono}
               onChangeText={(value) => handleInputChange('telefono', value)}
               placeholder="55 1234 5678"
@@ -307,13 +331,14 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Contraseña</Text>
-          <View style={styles.passwordContainer}>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#4ecdc4" style={styles.inputIcon} />
             <TextInput
-              style={[styles.input, styles.passwordInput]}
+              style={styles.inputPassword}
               value={formData.contraseña}
               onChangeText={(value) => handleInputChange('contraseña', value)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Minimum 6 characters"
               placeholderTextColor="#95a5a6"
               secureTextEntry={!showPassword}
             />
@@ -321,21 +346,24 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
               style={styles.eyeButton}
               onPress={() => setShowPassword(!showPassword)}
             >
-              <Text style={styles.eyeButtonText}>
-                {showPassword ? '🙈' : '👁️'}
-              </Text>
+              <Ionicons 
+                name={showPassword ? 'eye-outline' : 'eye-off-outline'} 
+                size={20} 
+                color="#95a5a6" 
+              />
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Confirmar Contraseña</Text>
-          <View style={styles.passwordContainer}>
+          <Text style={styles.label}>Confirm Password</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#4ecdc4" style={styles.inputIcon} />
             <TextInput
-              style={[styles.input, styles.passwordInput]}
+              style={styles.inputPassword}
               value={formData.confirmarContraseña}
               onChangeText={(value) => handleInputChange('confirmarContraseña', value)}
-              placeholder="Repite tu contraseña"
+              placeholder="Repeat your password"
               placeholderTextColor="#95a5a6"
               secureTextEntry={!showConfirmPassword}
             />
@@ -343,9 +371,11 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
               style={styles.eyeButton}
               onPress={() => setShowConfirmPassword(!showConfirmPassword)}
             >
-              <Text style={styles.eyeButtonText}>
-                {showConfirmPassword ? '🙈' : '👁️'}
-              </Text>
+              <Ionicons 
+                name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} 
+                size={20} 
+                color="#95a5a6" 
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -356,7 +386,8 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
         onPress={handleContinue}
         disabled={!formData.nombre || !formData.email || !formData.contraseña}
       >
-        <Text style={styles.continueButtonText}>Continuar →</Text>
+        <Text style={styles.continueButtonText}>Continue</Text>
+        <Ionicons name="arrow-forward" size={20} color="#f7fff9" />
       </TouchableOpacity>
 
       <TouchableOpacity 
@@ -364,27 +395,32 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
         onPress={() => navigation.navigate('Login')}
       >
         <Text style={styles.backToLoginText}>
-          ¿Ya tienes cuenta? <Text style={styles.loginLink}>Iniciar Sesión</Text>
+          Already have an account? <Text style={styles.loginLink}>Sign In</Text>
         </Text>
       </TouchableOpacity>
     </ScrollView>
   );
 
-  // PASO 2: Selección de Rol
+  // STEP 2: Account Type Selection
   const renderStep2 = () => (
     <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backButtonText}>← Atrás</Text>
+          <Ionicons name="arrow-back" size={24} color="#1a535c" />
         </TouchableOpacity>
-        <Text style={styles.title}>🎯 Selecciona tu Rol</Text>
-        <Text style={styles.subtitle}>¿Cómo usarás YOLINK?</Text>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressSegment, styles.progressActive]} />
-          <View style={[styles.progressSegment, styles.progressActive]} />
-          <View style={styles.progressSegment} />
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Account Type</Text>
+          <Text style={styles.subtitle}>Step 2 of 3</Text>
         </View>
       </View>
+
+      <View style={styles.progressBar}>
+        <View style={[styles.progressSegment, styles.progressActive]} />
+        <View style={[styles.progressSegment, styles.progressActive]} />
+        <View style={styles.progressSegment} />
+      </View>
+
+      <Text style={styles.sectionTitle}>How will you use YOLINK?</Text>
 
       <View style={styles.roleContainer}>
         <TouchableOpacity 
@@ -394,15 +430,15 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
           ]}
           onPress={() => handleUserTypeSelect('vendor')}
         >
-          <View style={styles.roleIcon}>
-            <Text style={styles.roleEmoji}>🏪</Text>
+          <View style={styles.roleIconContainer}>
+            <Ionicons name="storefront" size={48} color={formData.userType === 'vendor' ? '#ff6b6b' : '#4ecdc4'} />
           </View>
-          <Text style={styles.roleTitle}>Soy Vendedor</Text>
+          <Text style={styles.roleTitle}>Vendor</Text>
           <Text style={styles.roleDescription}>
-            Vendo productos o tengo un negocio local
+            I have a local business and want to sell my products
           </Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>Ideal para negocios</Text>
+            <Text style={styles.roleBadgeText}>For Businesses</Text>
           </View>
         </TouchableOpacity>
 
@@ -413,133 +449,119 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
           ]}
           onPress={() => handleUserTypeSelect('client')}
         >
-          <View style={styles.roleIcon}>
-            <Text style={styles.roleEmoji}>🌎</Text>
+          <View style={styles.roleIconContainer}>
+            <Ionicons name="compass" size={48} color={formData.userType === 'client' ? '#ff6b6b' : '#4ecdc4'} />
           </View>
-          <Text style={styles.roleTitle}>Soy Turista</Text>
+          <Text style={styles.roleTitle}>Customer</Text>
           <Text style={styles.roleDescription}>
-            Quiero descubrir y comprar en negocios locales
+            I want to discover and buy from local businesses
           </Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>Explora México</Text>
+            <Text style={styles.roleBadgeText}>For Explorers</Text>
           </View>
         </TouchableOpacity>
       </View>
     </ScrollView>
   );
 
-  // PASO 3: Información Adicional
+  // STEP 3: Additional Information
   const renderStep3 = () => (
     <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backButtonText}>← Atrás</Text>
+          <Ionicons name="arrow-back" size={24} color="#1a535c" />
         </TouchableOpacity>
-        <Text style={styles.title}>
-          {formData.userType === 'vendor' ? '🏪 Tu Negocio' : '🌟 Tus Preferencias'}
-        </Text>
-        <Text style={styles.subtitle}>Completa tu perfil</Text>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressSegment, styles.progressActive]} />
-          <View style={[styles.progressSegment, styles.progressActive]} />
-          <View style={[styles.progressSegment, styles.progressActive]} />
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>
+            {formData.userType === 'vendor' ? 'Your Business' : 'Your Preferences'}
+          </Text>
+          <Text style={styles.subtitle}>Step 3 of 3</Text>
         </View>
+      </View>
+
+      <View style={styles.progressBar}>
+        <View style={[styles.progressSegment, styles.progressActive]} />
+        <View style={[styles.progressSegment, styles.progressActive]} />
+        <View style={[styles.progressSegment, styles.progressActive]} />
       </View>
 
       {formData.userType === 'vendor' ? (
         <View style={styles.vendorFields}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Categoría del Negocio *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.categoria}
-              onChangeText={(value) => handleInputChange('categoria', value)}
-              placeholder="Ej: Restaurante, Tienda de artesanías, Café"
-              placeholderTextColor="#95a5a6"
-            />
+            <Text style={styles.label}>Business Category</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="pricetag-outline" size={20} color="#4ecdc4" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={formData.categoria}
+                onChangeText={(value) => handleInputChange('categoria', value)}
+                placeholder="e.g., Restaurant, Cafe, Crafts"
+                placeholderTextColor="#95a5a6"
+              />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Ubicación del Negocio *</Text>
+            <Text style={styles.label}>Business Location</Text>
             <TouchableOpacity 
               style={styles.mapButton}
               onPress={handleLocationPick}
             >
-              <View style={styles.mapButtonContent}>
-                <Text style={styles.mapIcon}>📍</Text>
-                <View style={styles.mapTextContainer}>
-                  <Text style={styles.mapButtonText}>
-                    {formData.direccion || 'Seleccionar ubicación en el mapa'}
-                  </Text>
-                  {formData.direccion && (
-                    <Text style={styles.mapButtonSubtext}>
-                      Toca para cambiar ubicación
-                    </Text>
-                  )}
-                </View>
+              <Ionicons name="location" size={24} color="#4ecdc4" />
+              <View style={styles.mapTextContainer}>
+                <Text style={styles.mapButtonText}>
+                  {formData.direccion || 'Select location on map'}
+                </Text>
+                {formData.direccion && (
+                  <Text style={styles.mapButtonSubtext}>Tap to change</Text>
+                )}
               </View>
+              <Ionicons name="chevron-forward" size={20} color="#95a5a6" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Descripción del Negocio</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={formData.descripcion}
-              onChangeText={(value) => handleInputChange('descripcion', value)}
-              placeholder="Describe tu negocio: qué vendes, qué te hace especial..."
-              placeholderTextColor="#95a5a6"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-            <Text style={styles.helperText}>
-              {formData.descripcion.length}/200 caracteres
-            </Text>
+            <Text style={styles.label}>Description</Text>
+            <View style={[styles.inputContainer, styles.textAreaContainer]}>
+              <TextInput
+                style={styles.textArea}
+                value={formData.descripcion}
+                onChangeText={(value) => handleInputChange('descripcion', value)}
+                placeholder="Describe your business..."
+                placeholderTextColor="#95a5a6"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
           </View>
         </View>
       ) : (
         <View style={styles.clientFields}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Tus Intereses</Text>
+            <Text style={styles.label}>Your Interests</Text>
             <Text style={styles.helperText}>
-              Selecciona tus intereses para recomendaciones personalizadas
+              Select the topics you're interested in
             </Text>
-            <TextInput
-              style={styles.input}
-              value={formData.intereses}
-              onChangeText={(value) => handleInputChange('intereses', value)}
-              placeholder="historia, arte, gastronomía, compras"
-              placeholderTextColor="#95a5a6"
-            />
-          </View>
-
-          <View style={styles.interestChips}>
-            {['historia', 'arte', 'gastronomía', 'compras', 'cultura', 'naturaleza'].map((interest) => (
-              <TouchableOpacity
-                key={interest}
-                style={[
-                  styles.chip,
-                  formData.intereses.toLowerCase().includes(interest.toLowerCase()) && styles.chipActive
-                ]}
-                onPress={() => {
-                  const currentInterests = formData.intereses.split(',').map(i => i.trim()).filter(i => i);
-                  if (currentInterests.includes(interest)) {
-                    const newInterests = currentInterests.filter(i => i !== interest);
-                    handleInputChange('intereses', newInterests.join(', '));
-                  } else {
-                    handleInputChange('intereses', [...currentInterests, interest].join(', '));
-                  }
-                }}
-              >
-                <Text style={[
-                  styles.chipText,
-                  formData.intereses.toLowerCase().includes(interest.toLowerCase()) && styles.chipTextActive
-                ]}>
-                  {interest}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.interestChips}>
+              {availableInterests.map((interest) => (
+                <TouchableOpacity
+                  key={interest}
+                  style={[
+                    styles.chip,
+                    formData.intereses.includes(interest) && styles.chipActive
+                  ]}
+                  onPress={() => toggleInterest(interest)}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    formData.intereses.includes(interest) && styles.chipTextActive
+                  ]}>
+                    {interest}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
       )}
@@ -556,18 +578,19 @@ const CreateAccount: React.FC<Props> = ({ navigation }) => {
         {loading ? (
           <ActivityIndicator color="#f7fff9" />
         ) : (
-          <Text style={styles.createAccountButtonText}>
-            🎉 Crear Mi Cuenta
-          </Text>
+          <>
+            <Text style={styles.createAccountButtonText}>Create My Account</Text>
+            <Ionicons name="checkmark-circle" size={20} color="#f7fff9" />
+          </>
         )}
       </TouchableOpacity>
 
       <View style={styles.termsContainer}>
         <Text style={styles.termsText}>
-          Al crear una cuenta, aceptas nuestros{' '}
-          <Text style={styles.termsLink}>Términos y Condiciones</Text>
-          {' '}y{' '}
-          <Text style={styles.termsLink}>Política de Privacidad</Text>
+          By creating an account, you agree to our{' '}
+          <Text style={styles.termsLink}>Terms and Conditions</Text>
+          {' '}and{' '}
+          <Text style={styles.termsLink}>Privacy Policy</Text>
         </Text>
       </View>
     </ScrollView>
@@ -595,39 +618,32 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 20,
+    marginBottom: 20,
+    marginTop: 40,
   },
   backButton: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    padding: 10,
+    padding: 8,
+    marginRight: 16,
   },
-  backButtonText: {
-    fontSize: 16,
-    color: '#4ecdc4',
-    fontWeight: '600',
+  headerContent: {
+    flex: 1,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#1a535c',
-    textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#95a5a6',
-    textAlign: 'center',
-    marginBottom: 20,
   },
   progressBar: {
     flexDirection: 'row',
     gap: 8,
-    width: '100%',
-    maxWidth: 200,
+    marginBottom: 32,
   },
   progressSegment: {
     flex: 1,
@@ -645,78 +661,62 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1a535c',
     marginBottom: 8,
   },
-  input: {
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
     borderWidth: 2,
     borderColor: '#c1f9e1',
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: '#ffffff',
-    color: '#1a535c',
+    paddingHorizontal: 16,
   },
-  phoneContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  inputIcon: {
+    marginRight: 12,
   },
-  countryCode: {
-    backgroundColor: '#c1f9e1',
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#c1f9e1',
-    borderRightWidth: 0,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-  },
-  countryCodeText: {
-    fontSize: 16,
-    color: '#1a535c',
-    fontWeight: '600',
-  },
-  phoneInput: {
+  input: {
     flex: 1,
-    borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: '#1a535c',
   },
-  passwordContainer: {
-    position: 'relative',
-  },
-  passwordInput: {
-    paddingRight: 50,
+  inputPassword: {
+    flex: 1,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: '#1a535c',
   },
   eyeButton: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    padding: 4,
+    padding: 8,
   },
-  eyeButtonText: {
-    fontSize: 20,
+  textAreaContainer: {
+    alignItems: 'flex-start',
   },
   textArea: {
-    height: 120,
-    textAlignVertical: 'top',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#95a5a6',
-    marginTop: 4,
+    width: '100%',
+    minHeight: 100,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1a535c',
   },
   continueButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#ff6b6b',
     padding: 18,
     borderRadius: 12,
-    alignItems: 'center',
     marginBottom: 20,
     shadowColor: '#ff6b6b',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+    gap: 8,
   },
   continueButtonText: {
     color: '#f7fff9',
@@ -724,10 +724,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   createAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#ff6b6b',
     padding: 18,
     borderRadius: 12,
-    alignItems: 'center',
     marginTop: 20,
     marginBottom: 15,
     shadowColor: '#ff6b6b',
@@ -735,6 +737,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+    gap: 8,
   },
   createAccountButtonText: {
     color: '#f7fff9',
@@ -746,7 +749,7 @@ const styles = StyleSheet.create({
   },
   backToLogin: {
     alignItems: 'center',
-    padding: 10,
+    padding: 7,
   },
   backToLoginText: {
     fontSize: 16,
@@ -756,27 +759,31 @@ const styles = StyleSheet.create({
     color: '#4ecdc4',
     fontWeight: 'bold',
   },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1a535c',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
   roleContainer: {
+    gap: 16,
     marginBottom: 30,
   },
   roleCard: {
     backgroundColor: '#ffffff',
     padding: 24,
     borderRadius: 16,
-    marginBottom: 16,
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: '#c1f9e1',
     alignItems: 'center',
   },
   roleCardSelected: {
     borderColor: '#4ecdc4',
-    backgroundColor: '#c1f9e1',
+    backgroundColor: '#f7fff9',
   },
-  roleIcon: {
-    marginBottom: 12,
-  },
-  roleEmoji: {
-    fontSize: 48,
+  roleIconContainer: {
+    marginBottom: 16,
   },
   roleTitle: {
     fontSize: 22,
@@ -794,8 +801,8 @@ const styles = StyleSheet.create({
   },
   roleBadge: {
     backgroundColor: '#4ecdc4',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
   },
   roleBadgeText: {
@@ -810,23 +817,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
     borderWidth: 2,
     borderColor: '#c1f9e1',
     borderRadius: 12,
-    backgroundColor: '#ffffff',
-    overflow: 'hidden',
-  },
-  mapButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
     padding: 16,
-  },
-  mapIcon: {
-    fontSize: 24,
-    marginRight: 12,
   },
   mapTextContainer: {
     flex: 1,
+    marginLeft: 12,
   },
   mapButtonText: {
     fontSize: 16,
@@ -838,14 +839,18 @@ const styles = StyleSheet.create({
     color: '#4ecdc4',
     marginTop: 2,
   },
+  helperText: {
+    fontSize: 12,
+    color: '#95a5a6',
+    marginBottom: 12,
+  },
   interestChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 12,
   },
   chip: {
-    backgroundColor: '#c1f9e1',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
