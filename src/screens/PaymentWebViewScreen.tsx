@@ -1,81 +1,109 @@
-// screens/PaymentWebViewScreen.tsx
+// src/screens/PaymentWebViewScreen.tsx - VERSIÓN CORREGIDA
 import { RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    StyleSheet,
-    View
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-type PaymentWebViewScreenProps = {
-  route: RouteProp<{ params: {
+// ✅ DEFINIR TIPOS PARA EL SCANN STACK
+type ScannStackParamList = {
+  ScannMain: undefined;
+  PaymentWebView: {
     redirectUrl: string;
     paymentData: any;
-  } }, 'params'>;
-  navigation: any;
+  };
 };
 
-const PaymentWebViewScreen: React.FC<PaymentWebViewScreenProps> = ({ route, navigation }) => {
+type PaymentWebViewScreenRouteProp = RouteProp<ScannStackParamList, 'PaymentWebView'>;
+type PaymentWebViewScreenNavigationProp = StackNavigationProp<ScannStackParamList, 'PaymentWebView'>;
+
+type Props = {
+  route: PaymentWebViewScreenRouteProp;
+  navigation: PaymentWebViewScreenNavigationProp;
+};
+
+const PaymentWebViewScreen: React.FC<Props> = ({ route, navigation }) => {
   const { redirectUrl, paymentData } = route.params;
   const [loading, setLoading] = useState(true);
 
-  const handleWebViewMessage = async (event: any) => {
+  const handleNavigationStateChange = (navState: any) => {
+    console.log('🔗 URL actual:', navState.url);
+    
+    // Detectar cuando el pago se completa
+    if (navState.url.includes('/success') || navState.url.includes('/finish')) {
+      handlePaymentSuccess();
+    }
+    
+    if (navState.url.includes('/error') || navState.url.includes('/cancel')) {
+      handlePaymentError();
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
     try {
-      const message = JSON.parse(event.nativeEvent.data);
-      console.log('📨 Mensaje desde WebView:', message);
+      setLoading(true);
+      
+      // Completar el pago en el backend
+      const completeResponse = await fetch('http://192.168.14.98:3001/op/continue-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentId: paymentData.incomingPaymentId,
+          grant: 'authorized'
+        })
+      });
 
-      if (message.type === 'AUTHORIZATION_SUCCESS') {
-        // 3. Completar el pago con los datos de autorización
-        setLoading(true);
-        
-        const completeResponse = await fetch('http://192.168.14.98:3001/op/complete-payment', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            incomingPaymentId: paymentData.incomingPaymentId,
-            continueUri: paymentData.continueUri,
-            continueAccessToken: paymentData.continueAccessToken,
-            interact_ref: message.interact_ref,
-            hash: message.hash
-          })
-        });
+      const completeResult = await completeResponse.json();
 
-        const completeResult = await completeResponse.json();
-
-        if (completeResult.ok) {
-          Alert.alert(
-            '✅ Pago Completado', 
-            `Tu pago de $${paymentData.amount} ha sido procesado exitosamente.\n\nEstado: ${completeResult.outgoingPayment.state}`,
-            [
-              { 
-                text: 'Aceptar', 
-                onPress: () => navigation.goBack() 
-              }
-            ]
-          );
-          console.log('💰 Pago finalizado:', completeResult.outgoingPayment);
-        } else {
-          Alert.alert('Error', 'No se pudo completar el pago: ' + completeResult.error);
-        }
-      } else if (message.type === 'CLOSE_WEBVIEW') {
-        navigation.goBack();
+      if (completeResult.ok) {
+        Alert.alert(
+          '✅ Pago Completado', 
+          `Tu pago de $${paymentData.amount} ha sido procesado exitosamente.`,
+          [
+            { 
+              text: 'Aceptar', 
+              onPress: () => navigation.goBack() // ✅ Volver al scanner
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'No se pudo completar el pago: ' + completeResult.error);
       }
     } catch (error) {
-      console.error('Error procesando mensaje:', error);
+      console.error('Error completando pago:', error);
+      Alert.alert('Error', 'Hubo un problema procesando tu pago');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePaymentError = () => {
+    Alert.alert(
+      '❌ Pago Cancelado',
+      'El pago fue cancelado o hubo un error durante el proceso.',
+      [
+        { 
+          text: 'Entendido', 
+          onPress: () => navigation.goBack() // ✅ Volver al scanner
+        }
+      ]
+    );
   };
 
   return (
     <View style={styles.container}>
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#667eea" />
+          <ActivityIndicator size="large" color="#ff6b6b" />
+          <Text style={styles.loadingText}>Cargando autorización...</Text>
         </View>
       )}
       
@@ -83,7 +111,7 @@ const PaymentWebViewScreen: React.FC<PaymentWebViewScreenProps> = ({ route, navi
         source={{ uri: redirectUrl }}
         style={styles.webview}
         onLoadEnd={() => setLoading(false)}
-        onMessage={handleWebViewMessage}
+        onNavigationStateChange={handleNavigationStateChange}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={true}
@@ -105,10 +133,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#ff6b6b',
   },
 });
 

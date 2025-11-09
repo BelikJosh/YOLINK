@@ -1,3 +1,4 @@
+
 export type RootStackParamList = {
   Login: undefined;
   CreateAccount: undefined;
@@ -12,11 +13,15 @@ export type RootStackParamList = {
 };
 
 export type ClientTabParamList = {
-  Explore: { user?: UserData };
-  Near: { user?: UserData };
-  Scann: { user?: UserData };
-  Favorites: { user?: UserData };
-  ProfileClient: { user?: UserData };
+  Explore: undefined;
+  Near: undefined;
+  Scann: undefined;
+  Favorites: undefined;
+  ProfileClient: undefined;
+  PaymentWebView?: { // ✅ AGREGAR ESTO
+    redirectUrl: string;
+    paymentData: any;
+  };
 };
 
 export type VendorTabParamList = {
