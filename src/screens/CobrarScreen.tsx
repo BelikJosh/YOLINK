@@ -9,12 +9,18 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  Alert,
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { productoService } from '../services/productoService';
 import { ventaService } from '../services/ventaService';
+import { paymentService } from '../services/paymentService'; // NUEVO SERVICIO
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useIsFocused } from '@react-navigation/native';
+import axios from 'axios';
 
 interface ProductoSeleccionado {
   producto: any;
@@ -29,15 +35,18 @@ const CobrarScreen = () => {
   const [generandoQR, setGenerandoQR] = useState(false);
   const [qrCode, setQrCode] = useState<string>('');
   const [user, setUser] = useState<any>(null);
+  const [paymentInfo, setPaymentInfo] = useState<any>(null); // NUEVO: info del pago
   
-  // Hook para detectar cuando la pantalla está enfocada
   const isFocused = useIsFocused();
+
+
+  const API_BASE_URL = 'http://192.168.14.62:3001'; // ← CAMBIA ESTA IP
 
   useEffect(() => {
     if (isFocused) {
       cargarUsuarioYProductos();
     }
-  }, [isFocused]); // Se ejecuta cada vez que la pantalla recibe foco
+  }, [isFocused]);
 
   const cargarUsuarioYProductos = async () => {
     try {
@@ -47,7 +56,6 @@ const CobrarScreen = () => {
         const userData = JSON.parse(userString);
         setUser(userData);
         
-        // Cargar productos del vendedor
         const productosData = await productoService.obtenerProductosPorVendedor(userData.id);
         setProductos(productosData);
         console.log('🔄 Productos cargados en Cobrar:', productosData.length);
@@ -59,42 +67,38 @@ const CobrarScreen = () => {
     }
   };
 
-  // ... el resto del código se mantiene igual ...
- // En CobrarScreen.tsx, en la función agregarProducto:
-const agregarProducto = (producto: any) => {
-  // Validar que el producto tenga precio
-  if (!producto.precio) {
-    console.error('❌ Producto sin precio:', producto);
-    Alert.alert('Error', 'El producto no tiene precio definido');
-    return;
-  }
+  const agregarProducto = (producto: any) => {
+    if (!producto.precio) {
+      console.error('❌ Producto sin precio:', producto);
+      Alert.alert('Error', 'El producto no tiene precio definido');
+      return;
+    }
 
-  const existente = productosSeleccionados.find(p => p.producto.id === producto.id);
-  
-  if (existente) {
-    // Si ya existe, aumentar cantidad
-    const nuevaCantidad = existente.cantidad + 1;
-    const nuevoSubtotal = nuevaCantidad * (producto.precio || 0);
+    const existente = productosSeleccionados.find(p => p.producto.id === producto.id);
     
-    setProductosSeleccionados(prev => 
-      prev.map(p => 
-        p.producto.id === producto.id 
-          ? { ...p, cantidad: nuevaCantidad, subtotal: nuevoSubtotal }
-          : p
-      )
-    );
-  } else {
-    // Si no existe, agregar nuevo
-    setProductosSeleccionados(prev => [
-      ...prev,
-      {
-        producto,
-        cantidad: 1,
-        subtotal: producto.precio || 0
-      }
-    ]);
-  }
-};
+    if (existente) {
+      const nuevaCantidad = existente.cantidad + 1;
+      const nuevoSubtotal = nuevaCantidad * (producto.precio || 0);
+      
+      setProductosSeleccionados(prev => 
+        prev.map(p => 
+          p.producto.id === producto.id 
+            ? { ...p, cantidad: nuevaCantidad, subtotal: nuevoSubtotal }
+            : p
+        )
+      );
+    } else {
+      setProductosSeleccionados(prev => [
+        ...prev,
+        {
+          producto,
+          cantidad: 1,
+          subtotal: producto.precio || 0
+        }
+      ]);
+    }
+  };
+
   const removerProducto = (productoId: string) => {
     setProductosSeleccionados(prev => 
       prev.filter(p => p.producto.id !== productoId)
@@ -122,77 +126,69 @@ const agregarProducto = (producto: any) => {
     return productosSeleccionados.reduce((total, item) => total + item.subtotal, 0);
   };
 
-// screens/CobrarScreen.tsx (SOLO FUNCIÓN generarQR ACTUALIZADA)
-const generarQR = async () => {
-  if (productosSeleccionados.length === 0) {
-    Alert.alert('Error', 'Selecciona al menos un producto');
-    return;
-  }
-
-  setGenerandoQR(true);
-
-  try {
-    const total = calcularTotal();
-    const productsData = productosSeleccionados.map(item => ({
-      productoId: item.producto.id,
-      nombre: item.producto.nombre,
-      precio: item.producto.precio,
-      cantidad: item.cantidad,
-      subtotal: item.subtotal
-    }));
-
-    // Llamar al backend para generar QR REAL con OpenPayments
-    const response = await fetch('http://192.168.14.168:3001/op/generate-payment-qr', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: total,
-        description: `Compra de ${productosSeleccionados.length} productos`,
-        vendorName: user?.nombre || 'Vendedor YOLINK'
-      })
-    });
-
-    const result = await response.json();
-
-    if (result.ok) {
-      setQrData(result.paymentData);
-      
-      // Guardar venta en base de datos
-      const venta = {
-        id: `venta_${Date.now()}`,
-        vendedorId: user.id,
-        productos: productsData,
-        total: total,
-        fecha: new Date().toISOString(),
-        estado: 'pendiente',
-        qrData: result.paymentData,
-        incomingPaymentId: result.incomingPayment.id // Guardar referencia
-      };
-
-      const exito = await ventaService.crearVenta(venta);
-
-      if (exito) {
-        Alert.alert('✅ Éxito', 'QR de pago generado correctamente');
-        console.log('💰 Incoming Payment creado:', result.incomingPayment.id);
-      } else {
-        Alert.alert('Error', 'QR generado pero no se pudo guardar la venta');
-      }
-    } else {
-      Alert.alert('Error', result.error || 'No se pudo generar el QR de pago');
+  // FUNCIÓN ACTUALIZADA: Generar QR con Open Payments
+  const generarQR = async () => {
+    if (productosSeleccionados.length === 0) {
+      Alert.alert('Error', 'Selecciona al menos un producto');
+      return;
     }
-  } catch (error) {
-    console.error('Error generando QR:', error);
-    Alert.alert('Error', 'No se pudo conectar con el servidor de pagos');
-  } finally {
-    setGenerandoQR(false);
-  }
-};
+
+    setGenerandoQR(true);
+
+    try {
+      const total = calcularTotal();
+      
+      // 1. Generar QR de pago con el servidor Open Payments
+      const qrResult = await paymentService.generatePaymentQR(
+        total.toString(),
+        `Compra de ${productosSeleccionados.length} productos`,
+        user?.nombre || 'Vendedor'
+      );
+
+      if (qrResult.ok && qrResult.qrCode) {
+        // 2. Crear registro de venta en DynamoDB
+        const venta = {
+          id: `venta_${Date.now()}`,
+          vendedorId: user.id,
+          productos: productosSeleccionados.map(item => ({
+            productoId: item.producto.id,
+            nombre: item.producto.nombre,
+            precio: item.producto.precio,
+            cantidad: item.cantidad,
+            subtotal: item.subtotal
+          })),
+          total: total,
+          fecha: new Date().toISOString(),
+          estado: 'pendiente',
+          qrCode: qrResult.qrCode,
+          paymentInfo: qrResult.paymentInfo // Guardar info del pago
+        };
+
+        // 3. Guardar venta en la base de datos
+        const exito = await ventaService.crearVenta(venta);
+
+        if (exito) {
+          setQrCode(qrResult.qrCode);
+          setPaymentInfo(qrResult.paymentInfo);
+          Alert.alert('Éxito', 'QR de pago generado correctamente');
+        } else {
+          Alert.alert('Error', 'No se pudo guardar la venta');
+        }
+      } else {
+        Alert.alert('Error', qrResult.error || 'No se pudo generar el QR de pago');
+      }
+    } catch (error) {
+      console.error('Error generando QR:', error);
+      Alert.alert('Error', 'No se pudo conectar con el servicio de pagos');
+    } finally {
+      setGenerandoQR(false);
+    }
+  };
 
   const limpiarCarrito = () => {
     setProductosSeleccionados([]);
     setQrCode('');
+    setPaymentInfo(null);
   };
 
   if (loading) {
@@ -215,19 +211,19 @@ const generarQR = async () => {
           ) : (
             productos.map(producto => (
               <TouchableOpacity
-    key={producto.id}
-    style={styles.productoItem}
-    onPress={() => agregarProducto(producto)}
-  >
-    <View style={styles.productoInfo}>
-      <Text style={styles.productoNombre}>{producto.nombre || 'Producto sin nombre'}</Text>
-      <Text style={styles.productoPrecio}>
-        ${(producto.precio || 0).toFixed(2)}
-      </Text>
-      <Text style={styles.productoStock}>Stock: {producto.stock || 0}</Text>
-    </View>
-    <MaterialIcons name="add-circle" size={24} color="#48bb78" />
-  </TouchableOpacity>
+                key={producto.id}
+                style={styles.productoItem}
+                onPress={() => agregarProducto(producto)}
+              >
+                <View style={styles.productoInfo}>
+                  <Text style={styles.productoNombre}>{producto.nombre || 'Producto sin nombre'}</Text>
+                  <Text style={styles.productoPrecio}>
+                    ${(producto.precio || 0).toFixed(2)}
+                  </Text>
+                  <Text style={styles.productoStock}>Stock: {producto.stock || 0}</Text>
+                </View>
+                <MaterialIcons name="add-circle" size={24} color="#48bb78" />
+              </TouchableOpacity>
             ))
           )}
         </View>
@@ -273,21 +269,25 @@ const generarQR = async () => {
           </View>
         )}
 
-        {/* QR Code */}
+        {/* QR Code Generado */}
         {qrCode && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>QR Generado</Text>
+            <Text style={styles.sectionTitle}>QR de Pago Generado</Text>
             <View style={styles.qrContainer}>
-              <QRCode
-                value={JSON.stringify({
-                  ventaId: `venta_${Date.now()}`,
-                  total: calcularTotal(),
-                  productos: productosSeleccionados.length
-                })}
-                size={200}
-              />
+              <Image source={{ uri: qrCode }} style={styles.qrImage} />
             </View>
-            <Text style={styles.qrInstruction}>Escanea este código para completar el pago</Text>
+            
+            {paymentInfo && (
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentInfoTitle}>Información del Pago:</Text>
+                <Text style={styles.paymentInfoText}>Monto: ${paymentInfo.amount}</Text>
+                <Text style={styles.paymentInfoText}>Descripción: {paymentInfo.description}</Text>
+                <Text style={styles.paymentInfoText}>Vendedor: {paymentInfo.vendor}</Text>
+                <Text style={styles.paymentInfoHint}>
+                  El cliente debe escanear este QR con su app para pagar
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -324,7 +324,7 @@ const generarQR = async () => {
   );
 };
 
-// Los estilos se mantienen igual...
+// ESTILOS ACTUALIZADOS - Agregar estos nuevos estilos
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -452,9 +452,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 20,
   },
-  qrInstruction: {
-    textAlign: 'center',
+  qrImage: {
+    width: 250,
+    height: 250,
+    borderRadius: 12,
+  },
+  paymentInfo: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: '#f7fafc',
+    borderRadius: 8,
+  },
+  paymentInfoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2d3748',
+    marginBottom: 10,
+  },
+  paymentInfoText: {
+    fontSize: 14,
+    color: '#4a5568',
+    marginBottom: 5,
+  },
+  paymentInfoHint: {
+    fontSize: 12,
     color: '#718096',
+    fontStyle: 'italic',
     marginTop: 10,
   },
   actionButtons: {

@@ -1,3 +1,4 @@
+// screens/ProfileScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -10,104 +11,267 @@ import {
   ActivityIndicator,
   Switch,
 } from 'react-native';
-import { useAuth } from '../context/AuthContext'; // Ajusta la ruta según tu estructura
+import { useAuth } from '../context/AuthContext';
+import { dynamoDBService } from '../services/dynamoDBService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Tipos para OpenPayment
 interface OpenPaymentWallet {
   id: string;
-  address: string;
-  balance?: number;
+  paymentPointer: string;
   currency: string;
   isDefault: boolean;
+  balance?: number;
 }
 
 interface UserProfile {
   id: string;
-  name: string;
+  nombre: string;
   email: string;
-  phone?: string;
-  businessName?: string;
+  userType: 'client' | 'vendor';
+  walletOpenPay: string;
+  telefono?: string;
+  categoria?: string;
+  descripcion?: string;
+  fechaRegistro?: string;
+  rating?: number;
+  reseñasCount?: number;
+  ventasRealizadas?: number;
+  totalGanado?: number;
+  comprasRealizadas?: number;
+  totalGastado?: number;
+  horario?: any;
+  ubicacion?: any;
   wallets: OpenPaymentWallet[];
   notificationsEnabled: boolean;
+  businessName?: string;
 }
 
 const ProfileScreen = () => {
-  const { user, logout } = useAuth(); // Asumiendo que tienes un contexto de autenticación
+  const { user, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [addingWallet, setAddingWallet] = useState(false);
-  const [newWalletAddress, setNewWalletAddress] = useState('');
 
-  // Datos temporales del perfil
   const [formData, setFormData] = useState({
-    name: '',
+    nombre: '',
     email: '',
-    phone: '',
+    telefono: '',
     businessName: '',
+    descripcion: '',
+    categoria: '',
     notificationsEnabled: true,
   });
 
-  // Cargar datos del perfil
   useEffect(() => {
     loadProfileData();
-  }, []);
+  }, [user]);
 
   const loadProfileData = async () => {
     try {
       setLoading(true);
-      // Simular carga de datos - reemplaza con tu API real
-      const mockProfile: UserProfile = {
-        id: user?.id || '1',
-        name: user?.name || 'Usuario Vendedor',
-        email: user?.email || 'vendor@example.com',
-        phone: '+1234567890',
-        businessName: 'Mi Negocio',
-        wallets: [
-          {
-            id: '1',
-            address: '0x742d35Cc6634C0532925a3b8D1234567890ABCDE',
-            balance: 150.75,
-            currency: 'USD',
-            isDefault: true,
-          },
-        ],
-        notificationsEnabled: true,
-      };
+      console.log('🔍 Cargando perfil...');
+      
+      let userData = user;
 
-      setProfile(mockProfile);
-      setFormData({
-        name: mockProfile.name,
-        email: mockProfile.email,
-        phone: mockProfile.phone || '',
-        businessName: mockProfile.businessName || '',
-        notificationsEnabled: mockProfile.notificationsEnabled,
-      });
+      if (!userData) {
+        console.log('⚠️ No hay usuario en contexto, buscando en AsyncStorage...');
+        const storedUser = await AsyncStorage.getItem('currentUser');
+        if (storedUser) {
+          userData = JSON.parse(storedUser);
+          console.log('✅ Usuario encontrado en AsyncStorage:', userData?.id);
+        }
+      }
+
+      if (!userData) {
+        console.log('❌ No hay usuario disponible');
+        setLoading(false);
+        return;
+      }
+
+      console.log('📋 Obteniendo datos actualizados de DynamoDB...');
+      const updatedUserData = await dynamoDBService.getUserById(userData.id);
+      
+      if (updatedUserData) {
+        console.log('✅ Datos obtenidos de DynamoDB');
+        
+        const normalizedUser = normalizeDynamoDBData(updatedUserData);
+        
+        const userProfile: UserProfile = {
+          id: normalizedUser.id,
+          nombre: normalizedUser.nombre,
+          email: normalizedUser.email,
+          userType: normalizedUser.userType,
+          walletOpenPay: normalizedUser.walletOpenPay,
+          telefono: normalizedUser.telefono,
+          categoria: normalizedUser.categoria,
+          descripcion: normalizedUser.descripcion,
+          fechaRegistro: normalizedUser.fechaRegistro,
+          rating: normalizedUser.rating || 0,
+          reseñasCount: normalizedUser.reseñasCount || 0,
+          ventasRealizadas: normalizedUser.ventasRealizadas || 0,
+          totalGanado: normalizedUser.totalGanado || 0,
+          comprasRealizadas: normalizedUser.comprasRealizadas || 0,
+          totalGastado: normalizedUser.totalGastado || 0,
+          horario: normalizedUser.horario,
+          ubicacion: normalizedUser.ubicacion,
+          wallets: generateWalletsFromUserData(normalizedUser),
+          notificationsEnabled: true,
+          businessName: normalizedUser.userType === 'vendor' ? normalizedUser.nombre : '',
+        };
+
+        console.log('👤 Perfil creado exitosamente');
+        setProfile(userProfile);
+        setFormData({
+          nombre: userProfile.nombre,
+          email: userProfile.email,
+          telefono: userProfile.telefono || '',
+          businessName: userProfile.businessName || '',
+          descripcion: userProfile.descripcion || '',
+          categoria: userProfile.categoria || '',
+          notificationsEnabled: userProfile.notificationsEnabled,
+        });
+      } else {
+        console.log('⚠️ No se encontraron datos en DynamoDB, usando datos locales');
+        const localProfile: UserProfile = {
+          id: userData.id,
+          nombre: userData.nombre,
+          email: userData.email,
+          userType: userData.userType,
+          walletOpenPay: userData.walletOpenPay,
+          telefono: userData.telefono,
+          categoria: userData.categoria,
+          descripcion: userData.descripcion,
+          fechaRegistro: userData.fechaRegistro,
+          rating: userData.rating || 0,
+          reseñasCount: userData.reseñasCount || 0,
+          ventasRealizadas: userData.ventasRealizadas || 0,
+          totalGanado: userData.totalGanado || 0,
+          comprasRealizadas: userData.comprasRealizadas || 0,
+          totalGastado: userData.totalGastado || 0,
+          wallets: generateWalletsFromUserData(userData),
+          notificationsEnabled: true,
+          businessName: userData.userType === 'vendor' ? userData.nombre : '',
+        };
+        
+        setProfile(localProfile);
+        setFormData({
+          nombre: localProfile.nombre,
+          email: localProfile.email,
+          telefono: localProfile.telefono || '',
+          businessName: localProfile.businessName || '',
+          descripcion: localProfile.descripcion || '',
+          categoria: localProfile.categoria || '',
+          notificationsEnabled: localProfile.notificationsEnabled,
+        });
+      }
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los datos del perfil');
+      console.error('❌ Error loading profile:', error);
+      if (user) {
+        const fallbackProfile: UserProfile = {
+          id: user.id,
+          nombre: user.nombre,
+          email: user.email,
+          userType: user.userType,
+          walletOpenPay: user.walletOpenPay,
+          telefono: user.telefono,
+          categoria: user.categoria,
+          descripcion: user.descripcion,
+          wallets: generateWalletsFromUserData(user),
+          notificationsEnabled: true,
+          businessName: user.userType === 'vendor' ? user.nombre : '',
+          rating: 0,
+          reseñasCount: 0,
+          ventasRealizadas: 0,
+          totalGanado: 0,
+          comprasRealizadas: 0,
+          totalGastado: 0,
+        };
+        
+        setProfile(fallbackProfile);
+        setFormData({
+          nombre: fallbackProfile.nombre,
+          email: fallbackProfile.email,
+          telefono: fallbackProfile.telefono || '',
+          businessName: fallbackProfile.businessName || '',
+          descripcion: fallbackProfile.descripcion || '',
+          categoria: fallbackProfile.categoria || '',
+          notificationsEnabled: fallbackProfile.notificationsEnabled,
+        });
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const normalizeDynamoDBData = (dynamoData: any): any => {
+    if (!dynamoData) return {};
+    
+    const normalized: any = {};
+    
+    Object.keys(dynamoData).forEach(key => {
+      const value = dynamoData[key];
+      
+      if (value.S) {
+        normalized[key] = value.S;
+      } else if (value.N) {
+        normalized[key] = parseFloat(value.N);
+      } else if (value.M) {
+        normalized[key] = normalizeDynamoDBData(value.M);
+      } else if (value.L) {
+        normalized[key] = value.L.map((item: any) => {
+          if (item.S) return item.S;
+          if (item.N) return parseFloat(item.N);
+          if (item.M) return normalizeDynamoDBData(item.M);
+          return item;
+        });
+      } else if (value.BOOL !== undefined) {
+        normalized[key] = value.BOOL;
+      } else {
+        normalized[key] = value;
+      }
+    });
+    
+    return normalized;
+  };
+
+  const generateWalletsFromUserData = (userData: any): OpenPaymentWallet[] => {
+    const wallets: OpenPaymentWallet[] = [];
+    
+    if (userData.walletOpenPay) {
+      wallets.push({
+        id: '1',
+        paymentPointer: `$ilp.interledger-test.dev/${userData.walletOpenPay}`,
+        currency: 'MXN',
+        isDefault: true,
+        balance: userData.totalGanado || userData.totalGastado || 0,
+      });
+    }
+    
+    return wallets;
   };
 
   const handleSaveProfile = async () => {
     try {
       setSaving(true);
       
-      // Validaciones básicas
-      if (!formData.name.trim() || !formData.email.trim()) {
+      if (!formData.nombre.trim() || !formData.email.trim()) {
         Alert.alert('Error', 'Nombre y email son obligatorios');
         return;
       }
 
-      // Aquí iría la llamada a tu API para actualizar el perfil
-      console.log('Guardando perfil:', formData);
-      
-      // Simular guardado
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      setProfile(prev => prev ? { ...prev, ...formData } : null);
+      setProfile(prev => prev ? { 
+        ...prev, 
+        nombre: formData.nombre,
+        email: formData.email,
+        telefono: formData.telefono,
+        descripcion: formData.descripcion,
+        categoria: formData.categoria,
+        businessName: formData.businessName,
+      } : null);
+      
       setIsEditing(false);
       Alert.alert('Éxito', 'Perfil actualizado correctamente');
     } catch (error) {
@@ -115,71 +279,6 @@ const ProfileScreen = () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleAddWallet = async () => {
-    if (!newWalletAddress.trim()) {
-      Alert.alert('Error', 'Por favor ingresa una dirección de wallet válida');
-      return;
-    }
-
-    try {
-      setAddingWallet(true);
-      
-      // Aquí integrarías con OpenPayment API
-      // Por ahora simulamos la creación
-      const newWallet: OpenPaymentWallet = {
-        id: Date.now().toString(),
-        address: newWalletAddress,
-        currency: 'USD',
-        isDefault: profile?.wallets.length === 0,
-      };
-
-      setProfile(prev => prev ? {
-        ...prev,
-        wallets: [...prev.wallets, newWallet]
-      } : null);
-
-      setNewWalletAddress('');
-      Alert.alert('Éxito', 'Wallet agregada correctamente');
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo agregar la wallet');
-    } finally {
-      setAddingWallet(false);
-    }
-  };
-
-  const handleSetDefaultWallet = (walletId: string) => {
-    if (!profile) return;
-
-    const updatedWallets = profile.wallets.map(wallet => ({
-      ...wallet,
-      isDefault: wallet.id === walletId,
-    }));
-
-    setProfile({ ...profile, wallets: updatedWallets });
-    // Aquí también guardarías el cambio en tu API
-  };
-
-  const handleDeleteWallet = (walletId: string) => {
-    if (!profile) return;
-
-    Alert.alert(
-      'Eliminar Wallet',
-      '¿Estás seguro de que quieres eliminar esta wallet?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => {
-            const updatedWallets = profile.wallets.filter(wallet => wallet.id !== walletId);
-            setProfile({ ...profile, wallets: updatedWallets });
-            // Aquí también eliminarías de tu API
-          },
-        },
-      ]
-    );
   };
 
   const handleLogout = () => {
@@ -206,20 +305,34 @@ const ProfileScreen = () => {
     );
   }
 
+  if (!profile) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>No se pudo cargar el perfil</Text>
+        <Text style={styles.subErrorText}>Verifica tu conexión e intenta nuevamente</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadProfileData}>
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
-      {/* Header del Perfil */}
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {formData.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+            {profile.nombre.split(' ').map(n => n[0]).join('').toUpperCase()}
           </Text>
         </View>
-        <Text style={styles.name}>{formData.name}</Text>
-        <Text style={styles.email}>{formData.email}</Text>
+        <Text style={styles.name}>{profile.nombre}</Text>
+        <Text style={styles.email}>{profile.email}</Text>
+        <Text style={styles.userType}>
+          {profile.userType === 'vendor' ? 'Vendedor' : 'Cliente'}
+          {profile.categoria && ` • ${profile.categoria}`}
+        </Text>
       </View>
 
-      {/* Información del Perfil */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Información Personal</Text>
@@ -239,8 +352,8 @@ const ProfileScreen = () => {
               <Text style={styles.label}>Nombre</Text>
               <TextInput
                 style={styles.input}
-                value={formData.name}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+                value={formData.nombre}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, nombre: text }))}
                 placeholder="Ingresa tu nombre"
               />
             </View>
@@ -261,22 +374,48 @@ const ProfileScreen = () => {
               <Text style={styles.label}>Teléfono</Text>
               <TextInput
                 style={styles.input}
-                value={formData.phone}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
+                value={formData.telefono}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, telefono: text }))}
                 placeholder="Ingresa tu teléfono"
                 keyboardType="phone-pad"
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nombre del Negocio</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.businessName}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, businessName: text }))}
-                placeholder="Nombre de tu negocio"
-              />
-            </View>
+            {profile.userType === 'vendor' && (
+              <>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Nombre del Negocio</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.businessName}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, businessName: text }))}
+                    placeholder="Nombre de tu negocio"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Categoría</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.categoria}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, categoria: text }))}
+                    placeholder="Categoría de tu negocio"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Descripción</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={formData.descripcion}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, descripcion: text }))}
+                    placeholder="Descripción de tu negocio"
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+              </>
+            )}
 
             <View style={styles.switchGroup}>
               <Text style={styles.label}>Notificaciones</Text>
@@ -304,87 +443,125 @@ const ProfileScreen = () => {
           <View style={styles.infoContainer}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Nombre:</Text>
-              <Text style={styles.infoValue}>{formData.name}</Text>
+              <Text style={styles.infoValue}>{profile.nombre}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Email:</Text>
-              <Text style={styles.infoValue}>{formData.email}</Text>
+              <Text style={styles.infoValue}>{profile.email}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Teléfono:</Text>
-              <Text style={styles.infoValue}>{formData.phone || 'No especificado'}</Text>
+              <Text style={styles.infoValue}>{profile.telefono || 'No especificado'}</Text>
             </View>
+            {profile.userType === 'vendor' && (
+              <>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Negocio:</Text>
+                  <Text style={styles.infoValue}>{profile.businessName || profile.nombre}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Categoría:</Text>
+                  <Text style={styles.infoValue}>{profile.categoria || 'No especificada'}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Descripción:</Text>
+                  <Text style={styles.infoValue}>{profile.descripcion || 'No especificada'}</Text>
+                </View>
+              </>
+            )}
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Negocio:</Text>
-              <Text style={styles.infoValue}>{formData.businessName || 'No especificado'}</Text>
+              <Text style={styles.infoLabel}>Fecha Registro:</Text>
+              <Text style={styles.infoValue}>
+                {profile.fechaRegistro ? new Date(profile.fechaRegistro).toLocaleDateString() : 'No disponible'}
+              </Text>
             </View>
           </View>
         )}
       </View>
 
-      {/* Wallets de OpenPayment */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Wallets OpenPayment</Text>
+          <Text style={styles.sectionTitle}>Wallet OpenPayment</Text>
         </View>
 
-        {profile?.wallets.map((wallet) => (
-          <View key={wallet.id} style={styles.walletCard}>
-            <View style={styles.walletHeader}>
-              <Text style={styles.walletName}>
-                Wallet {wallet.currency} {wallet.isDefault && '(Principal)'}
-              </Text>
-              {!wallet.isDefault && (
-                <View style={styles.walletActions}>
-                  <TouchableOpacity
-                    onPress={() => handleSetDefaultWallet(wallet.id)}
-                    style={styles.walletActionButton}
-                  >
-                    <Text style={styles.walletActionText}>Hacer principal</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteWallet(wallet.id)}
-                    style={[styles.walletActionButton, styles.deleteButton]}
-                  >
-                    <Text style={styles.walletActionText}>Eliminar</Text>
-                  </TouchableOpacity>
+        {profile.wallets.length > 0 ? (
+          profile.wallets.map((wallet) => (
+            <View key={wallet.id} style={styles.walletCard}>
+              <View style={styles.walletHeader}>
+                <View style={styles.walletInfo}>
+                  <Text style={styles.walletName}>
+                    {wallet.currency} Wallet {wallet.isDefault && '⭐'}
+                  </Text>
+                  <Text style={styles.walletCurrency}>
+                    Moneda: {wallet.currency}
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.paymentPointerContainer}>
+                <Text style={styles.paymentPointerLabel}>Payment Pointer:</Text>
+                <Text style={styles.paymentPointer} numberOfLines={1}>
+                  {wallet.paymentPointer}
+                </Text>
+              </View>
+
+              {wallet.balance !== undefined && (
+                <View style={styles.balanceContainer}>
+                  <Text style={styles.walletBalance}>
+                    Balance: {wallet.currency} ${wallet.balance.toFixed(2)}
+                  </Text>
                 </View>
               )}
             </View>
-            <Text style={styles.walletAddress}>{wallet.address}</Text>
-            {wallet.balance !== undefined && (
-              <Text style={styles.walletBalance}>
-                Balance: {wallet.currency} {wallet.balance.toFixed(2)}
-              </Text>
-            )}
+          ))
+        ) : (
+          <View style={styles.noWalletsContainer}>
+            <Text style={styles.noWalletsText}>No hay wallets configuradas</Text>
           </View>
-        ))}
+        )}
+      </View>
 
-        {/* Formulario para agregar nueva wallet */}
-        <View style={styles.addWalletSection}>
-          <Text style={styles.addWalletTitle}>Agregar Nueva Wallet</Text>
-          <TextInput
-            style={styles.walletInput}
-            value={newWalletAddress}
-            onChangeText={setNewWalletAddress}
-            placeholder="Ingresa la dirección de la wallet"
-            placeholderTextColor="#999"
-          />
-          <TouchableOpacity
-            style={[styles.addWalletButton, addingWallet && styles.addWalletButtonDisabled]}
-            onPress={handleAddWallet}
-            disabled={addingWallet}
-          >
-            {addingWallet ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.addWalletButtonText}>Agregar Wallet</Text>
-            )}
-          </TouchableOpacity>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Estadísticas</Text>
+        <View style={styles.statsContainer}>
+          {profile.userType === 'vendor' ? (
+            <>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{profile.ventasRealizadas || 0}</Text>
+                <Text style={styles.statLabel}>Ventas</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>${(profile.totalGanado || 0).toFixed(2)}</Text>
+                <Text style={styles.statLabel}>Total Ganado</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{profile.rating || 0}⭐</Text>
+                <Text style={styles.statLabel}>Rating</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{profile.reseñasCount || 0}</Text>
+                <Text style={styles.statLabel}>Reseñas</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{profile.comprasRealizadas || 0}</Text>
+                <Text style={styles.statLabel}>Compras</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>${(profile.totalGastado || 0).toFixed(2)}</Text>
+                <Text style={styles.statLabel}>Total Gastado</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{profile.rating || 0}⭐</Text>
+                <Text style={styles.statLabel}>Rating</Text>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
-      {/* Acciones */}
       <View style={styles.section}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
@@ -407,6 +584,27 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     color: '#666',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 10,
+  },
+  subErrorText: {
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#6200ee',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '500',
   },
   header: {
     backgroundColor: '#6200ee',
@@ -436,6 +634,12 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 16,
     color: '#e0e0e0',
+    marginBottom: 5,
+  },
+  userType: {
+    fontSize: 14,
+    color: '#b39ddb',
+    fontWeight: '500',
   },
   section: {
     backgroundColor: '#fff',
@@ -489,6 +693,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#f9f9f9',
   },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
   switchGroup: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -540,76 +748,78 @@ const styles = StyleSheet.create({
   walletHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 5,
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  walletInfo: {
+    flex: 1,
   },
   walletName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 2,
   },
-  walletActions: {
-    flexDirection: 'row',
-    gap: 10,
+  walletCurrency: {
+    fontSize: 14,
+    color: '#666',
   },
-  walletActionButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#6200ee',
-    borderRadius: 4,
+  paymentPointerContainer: {
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    marginBottom: 10,
   },
-  deleteButton: {
-    backgroundColor: '#dc3545',
-  },
-  walletActionText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  walletAddress: {
+  paymentPointerLabel: {
     fontSize: 12,
     color: '#666',
-    fontFamily: 'monospace',
-    marginBottom: 5,
+    marginBottom: 2,
+  },
+  paymentPointer: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  balanceContainer: {
+    backgroundColor: '#e8f5e8',
+    padding: 8,
+    borderRadius: 5,
   },
   walletBalance: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#28a745',
-  },
-  addWalletSection: {
-    marginTop: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  addWalletTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+    color: '#28a745',
+    textAlign: 'center',
   },
-  walletInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 10,
-    fontSize: 14,
-    backgroundColor: '#f9f9f9',
-    marginBottom: 10,
+  noWalletsContainer: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
   },
-  addWalletButton: {
-    backgroundColor: '#28a745',
-    padding: 12,
-    borderRadius: 5,
+  noWalletsText: {
+    color: '#666',
+    fontSize: 16,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  statItem: {
     alignItems: 'center',
   },
-  addWalletButtonDisabled: {
-    opacity: 0.6,
-  },
-  addWalletButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  statValue: {
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#6200ee',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
   },
   logoutButton: {
     backgroundColor: '#dc3545',
