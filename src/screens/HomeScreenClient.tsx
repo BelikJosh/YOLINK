@@ -1,337 +1,225 @@
-// src/screens/HomeScreenClient.tsx
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import haversine from 'haversine-distance';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
 
-const { width, height } = Dimensions.get('window');
+const GOOGLE_MAPS_APIKEY = 'AIzaSyDvqzlFLL9XHiafJtJutIim_VcxPGRs3wk';
 
-// Datos de ejemplo para vendedores/artesanías
-const VENDORS_DATA = [
-  {
-    id: '1',
-    name: 'Joyeria Jade',
-    category: 'Joyería',
-    location: {
-      latitude: 17.0606,
-      longitude: -96.7252
-    },
-    rating: 4.8
-  },
-  {
-    id: '2',
-    name: 'Café Colonial',
-    category: 'Café',
-    location: {
-      latitude: 17.0610,
-      longitude: -96.7230
-    },
-    rating: 4.5
-  },
-  {
-    id: '3',
-    name: 'Máscaras Artesanales',
-    category: 'Artesanías',
-    location: {
-      latitude: 17.0620,
-      longitude: -96.7260
-    },
-    rating: 4.9
-  },
-  {
-    id: '4',
-    name: 'Templo Histórico',
-    category: 'Punto de Interés',
-    location: {
-      latitude: 17.0590,
-      longitude: -96.7240
-    },
-    rating: 4.7
-  }
-];
+const HomeScreenClient = ({ route }: any) => {
+  const [location, setLocation] = useState<any>(null);
+  const [destination, setDestination] = useState<any>(null);
+  const [storeName, setStoreName] = useState('');
+  const [storeAddress, setStoreAddress] = useState('');
+  const [distance, setDistance] = useState<number | null>(null);
+  const [isTracking, setIsTracking] = useState(false);
 
-// Ubicación por defecto (Oaxaca centro)
-const DEFAULT_REGION: Region = {
-  latitude: 17.0606,
-  longitude: -96.7252,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
-};
+  const mapRef = useRef<MapView>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
-export default function HomeScreenClient() {
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [selectedVendor, setSelectedVendor] = useState<any>(null);
-  const [region, setRegion] = useState<Region>(DEFAULT_REGION);
-  const [mapReady, setMapReady] = useState(false);
-
+  // Obtener ubicación inicial
   useEffect(() => {
     (async () => {
-      try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setErrorMsg('Permiso de ubicación denegado');
-          return;
-        }
-
-        let location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        
-        const newLocation = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude
-        };
-        
-        setUserLocation(newLocation);
-        
-        // Actualizar la región para centrar en la ubicación del usuario
-        setRegion({
-          ...newLocation,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        });
-      } catch (error) {
-        console.error('Error getting location:', error);
-        setErrorMsg('Error al obtener la ubicación');
-      }
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
     })();
   }, []);
 
-  const handleVendorPress = (vendor: any) => {
-    setSelectedVendor(vendor);
-    // Centrar el mapa en el vendedor seleccionado
-    setRegion({
-      latitude: vendor.location.latitude,
-      longitude: vendor.location.longitude,
-      latitudeDelta: 0.02,
-      longitudeDelta: 0.02,
-    });
+  // Configurar destino si se recibe una tienda
+  useEffect(() => {
+    if (route?.params?.store) {
+      const { name, address, latitude, longitude } = route.params.store;
+      setDestination({ latitude, longitude });
+      setStoreName(name);
+      setStoreAddress(address);
+
+      if (location && mapRef.current) {
+        mapRef.current.fitToCoordinates([location, { latitude, longitude }], {
+          edgePadding: { top: 100, right: 50, bottom: 100, left: 50 },
+          animated: true,
+        });
+      }
+    }
+  }, [route?.params?.store, location]);
+
+  // Calcular distancia en tiempo real
+  const startTracking = async () => {
+    if (!destination) return;
+
+    setIsTracking(true);
+    locationSubscription.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.High, distanceInterval: 1 },
+      (loc) => {
+        const newLocation = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
+        setLocation(newLocation);
+
+        const dist = haversine(newLocation, destination);
+        setDistance(dist);
+
+        if (dist < 10) {
+          setIsTracking(false);
+          if (locationSubscription.current) {
+            locationSubscription.current.remove();
+          }
+          alert('✅ Has llegado a tu destino');
+        }
+      }
+    );
   };
 
-  const handleMapReady = () => {
-    setMapReady(true);
+  const stopTracking = () => {
+    setIsTracking(false);
+    if (locationSubscription.current) {
+      locationSubscription.current.remove();
+    }
+  };
+
+  const clearRoute = () => {
+    stopTracking();
+    setDestination(null);
+    setDistance(null);
   };
 
   return (
     <View style={styles.container}>
-      {/* Mapa */}
-      <MapView
-        style={styles.map}
-        provider={PROVIDER_GOOGLE}
-        region={region}
-        onMapReady={handleMapReady}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-        showsCompass={true}
-        showsScale={true}
-      >
-        {/* Marcadores de vendedores */}
-        {VENDORS_DATA.map((vendor) => (
-          <Marker
-            key={vendor.id}
-            coordinate={vendor.location}
-            title={vendor.name}
-            description={vendor.category}
-            onPress={() => handleVendorPress(vendor)}
-          />
-        ))}
-      </MapView>
-
-      {/* Header de búsqueda */}
-      <View style={styles.searchContainer}>
-        <Text style={styles.searchTitle}>Search</Text>
-        <Text style={styles.searchSubtitle}>Artesanias Oaxaqueñas</Text>
-        
-        {/* Lista de categorías */}
-        <View style={styles.categoriesContainer}>
-          {VENDORS_DATA.map((vendor) => (
-            <TouchableOpacity 
-              key={vendor.id} 
-              style={styles.categoryItem}
-              onPress={() => handleVendorPress(vendor)}
-            >
-              <Text style={styles.categoryText}>• {vendor.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.separator} />
-      </View>
-
-      {/* Barra inferior de navegación */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navText}>Explore</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navText}>Near</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navText}>Pay</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navText}>Favorite</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navText}>Profile</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Modal de información del vendedor */}
-      {selectedVendor && (
-        <View style={styles.vendorInfo}>
-          <Text style={styles.vendorName}>{selectedVendor.name}</Text>
-          <Text style={styles.vendorCategory}>{selectedVendor.category}</Text>
-          <Text style={styles.vendorRating}>⭐ {selectedVendor.rating}</Text>
-          <TouchableOpacity 
-            style={styles.closeButton}
-            onPress={() => setSelectedVendor(null)}
+      {location ? (
+        <>
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            initialRegion={{
+              latitude: location.latitude,
+              longitude: location.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+            showsUserLocation
+            followsUserLocation
           >
-            <Text style={styles.closeButtonText}>Cerrar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            {destination && (
+              <Marker
+                coordinate={destination}
+                title={storeName}
+                description={storeAddress}
+              >
+                <Ionicons name="storefront" size={30} color="#ff6b6b" />
+              </Marker>
+            )}
 
-      {/* Mostrar mensaje de error si hay */}
-      {errorMsg && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{errorMsg}</Text>
-        </View>
+            {destination && (
+              <MapViewDirections
+                origin={location}
+                destination={destination}
+                apikey={GOOGLE_MAPS_APIKEY}
+                strokeWidth={4}
+                strokeColor="#4ecdc4"
+              />
+            )}
+          </MapView>
+
+          {destination && (
+            <View style={styles.infoContainer}>
+              <Text style={styles.title}>{storeName}</Text>
+              <Text style={styles.subtitle}>{storeAddress}</Text>
+
+              {distance !== null && (
+                <Text style={styles.distance}>
+                  Distancia restante: {(distance / 1000).toFixed(2)} km
+                </Text>
+              )}
+
+              {!isTracking ? (
+                <TouchableOpacity
+                  style={styles.startButton}
+                  onPress={startTracking}
+                >
+                  <Ionicons name="navigate" size={20} color="#fff" />
+                  <Text style={styles.btnText}>Comenzar ruta</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.stopButton}
+                  onPress={stopTracking}
+                >
+                  <Ionicons name="pause" size={20} color="#fff" />
+                  <Text style={styles.btnText}>Detener seguimiento</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={clearRoute}
+              >
+                <Ionicons name="close" size={20} color="#fff" />
+                <Text style={styles.btnText}>Cerrar ruta</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      ) : (
+        <Text style={styles.loading}>Obteniendo ubicación...</Text>
       )}
     </View>
   );
-}
+};
+
+export default HomeScreenClient;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  searchContainer: {
+  container: { flex: 1, backgroundColor: '#fff' },
+  map: { flex: 1 },
+  loading: { textAlign: 'center', marginTop: 50, color: '#1a535c' },
+  infoContainer: {
     position: 'absolute',
-    top: 50,
+    bottom: 20,
     left: 20,
     right: 20,
     backgroundColor: 'white',
-    borderRadius: 15,
     padding: 15,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 1000,
+    borderRadius: 15,
+    elevation: 6,
   },
-  searchTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  searchSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 15,
-  },
-  categoriesContainer: {
-    marginBottom: 10,
-  },
-  categoryItem: {
-    paddingVertical: 5,
-  },
-  categoryText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 5,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  title: { fontSize: 18, fontWeight: 'bold', color: '#1a535c' },
+  subtitle: { fontSize: 14, color: '#4f6367', marginBottom: 8 },
+  distance: { fontSize: 14, color: '#1a535c', marginBottom: 10 },
+  startButton: {
     flexDirection: 'row',
-    backgroundColor: 'white',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    zIndex: 1000,
-  },
-  navItem: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 5,
-  },
-  navText: {
-    fontSize: 12,
-    color: '#333',
-  },
-  vendorInfo: {
-    position: 'absolute',
-    bottom: 60,
-    left: 20,
-    right: 20,
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 1001,
-  },
-  vendorName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  vendorCategory: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
-  },
-  vendorRating: {
-    fontSize: 14,
-    color: '#ff9500',
-    marginBottom: 10,
-  },
-  closeButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4ecdc4',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 10,
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  stopButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#f4a261',
+    padding: 10,
+    borderRadius: 10,
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 8,
   },
-  closeButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  errorContainer: {
-    position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#ff6b6b',
     padding: 10,
-    borderRadius: 8,
-    zIndex: 1001,
+    borderRadius: 10,
+    justifyContent: 'center',
+    gap: 6,
   },
-  errorText: {
-    color: 'white',
-    textAlign: 'center',
-  },
+  btnText: { color: '#fff', fontWeight: '600' },
 });

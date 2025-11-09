@@ -2,11 +2,11 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { Text, View } from 'react-native';
+import CatalogueScreenVendor from '../screens/CatalogueScreenVendor'; // Importa el componente real
+import CobrarScreen from '../screens/CobrarScreen';
 import HomeScreenVendor from '../screens/HomeScreenVendor';
 import ProfileScreen from '../screens/ProfileScreen';
 import { VendorTabParamList } from './types';
-import CatalogueScreenVendor from '../screens/CatalogueScreenVendor'; // Importa el componente real
-import CobrarScreen from '../screens/CobrarScreen';
 
 // Screens placeholder con componentes básicos (solo los que están en desarrollo)
 const MakeAcountScreen = () => (
@@ -57,7 +57,7 @@ const VendorTabNavigator = () => {
         name="HomeVendor" 
         component={HomeScreenVendor}
         options={{
-          title: 'Inicio',
+          title: 'Home',
           tabBarIcon: ({ focused }) => (
             <TextIcon emoji="🏠" focused={focused} />
           ),
@@ -67,7 +67,7 @@ const VendorTabNavigator = () => {
         name="Catalogue" 
         component={CatalogueScreenVendor} // Usa el componente importado
         options={{
-          title: 'Catálogo',
+          title: 'Catálogue',
           tabBarIcon: ({ focused }) => (
             <TextIcon emoji="📦" focused={focused} />
           ),
@@ -77,7 +77,7 @@ const VendorTabNavigator = () => {
   name="MakeCount" 
   component={CobrarScreen}
   options={{
-    title: 'Cobrar',
+    title: 'Make Count',
     tabBarIcon: ({ focused }) => (
       <TextIcon emoji="💰" focused={focused} />
     ),
@@ -87,7 +87,7 @@ const VendorTabNavigator = () => {
         name="Sales" 
         component={SalesScreenVendor}
         options={{
-          title: 'Ventas',
+          title: 'Sales',
           tabBarIcon: ({ focused }) => (
             <TextIcon emoji="📊" focused={focused} />
           ),
@@ -97,7 +97,7 @@ const VendorTabNavigator = () => {
         name="ProfileVendor" 
         component={ProfileScreen}
         options={{
-          title: 'Perfil',
+          title: 'Profile',
           tabBarIcon: ({ focused }) => (
             <TextIcon emoji="👤" focused={focused} />
           ),

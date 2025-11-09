@@ -1,15 +1,19 @@
 // screens/CobrarScreen.tsx
-import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useIsFocused } from '@react-navigation/native'; // IMPORTANTE: Agrega esto
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
+  Alert,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
   Image
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { productoService } from '../services/productoService';
 import { ventaService } from '../services/ventaService';

@@ -23,6 +23,7 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedData, setScannedData] = useState<string | null>(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   // Solicitar permisos automáticamente
   useEffect(() => {
@@ -32,7 +33,7 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
   }, [permission]);
 
   const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
-    if (!isScanning) return;
+    if (!isScanning || processingPayment) return;
     
     console.log(`🔗 Código ${type} escaneado:`, data);
     setIsScanning(false);
@@ -42,10 +43,91 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
     processQRData(data);
   };
 
-  const processQRData = (data: string) => {
+  const processQRData = async (data: string) => {
+    try {
+      const qrData = JSON.parse(data);
+      
+      // Verificar si es un QR de pago OpenPayments
+      if (qrData.type === 'open-payment' && qrData.incomingPaymentId) {
+        console.log('💰 QR de pago OpenPayments detectado:', qrData);
+        setProcessingPayment(true);
+        
+        // Iniciar flujo de pago
+        await startPaymentFlow(qrData);
+        
+      } else {
+        // QR normal - mostrar información básica
+        showQRDetails(data, qrData);
+      }
+    } catch (error) {
+      console.error('Error procesando QR:', error);
+      Alert.alert(
+        '❌ QR Inválido', 
+        'No se pudo procesar el código QR escaneado',
+        [{ text: 'OK', onPress: () => resetScanner() }]
+      );
+    }
+  };
+
+  const startPaymentFlow = async (qrData: any) => {
+    try {
+      console.log('🎯 Iniciando flujo de pago...');
+      
+      // 1. Iniciar pago en el backend
+      const startResponse = await fetch('http://192.168.14.168:3001/op/start-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          incomingPaymentId: qrData.incomingPaymentId
+        })
+      });
+
+      const startResult = await startResponse.json();
+
+      if (startResult.ok) {
+        console.log('✅ Flujo iniciado, abriendo WebView...');
+        
+        // 2. Navegar a la pantalla de WebView para autorización
+        navigation.navigate('PaymentWebView', {
+          redirectUrl: startResult.redirectUrl,
+          paymentData: {
+            incomingPaymentId: qrData.incomingPaymentId,
+            continueUri: startResult.continueUri,
+            continueAccessToken: startResult.continueAccessToken,
+            amount: qrData.amount,
+            description: qrData.description,
+            vendor: qrData.vendor
+          }
+        });
+        
+        // Resetear scanner después de navegar
+        setTimeout(() => {
+          resetScanner();
+          setProcessingPayment(false);
+        }, 1000);
+        
+      } else {
+        throw new Error(startResult.error || 'No se pudo iniciar el pago');
+      }
+    } catch (error) {
+      console.error('Error en flujo de pago:', error);
+      Alert.alert(
+        '❌ Error de Pago', 
+        `No se pudo procesar el pago: ${error.message}`,
+        [{ text: 'OK', onPress: () => {
+          resetScanner();
+          setProcessingPayment(false);
+        }}]
+      );
+    }
+  };
+
+  const showQRDetails = (rawData: string, parsedData: any) => {
     Alert.alert(
       '✅ Código QR Escaneado',
-      data.length > 100 ? `${data.substring(0, 100)}...` : data,
+      `Tipo: ${parsedData.type || 'Desconocido'}\nMonto: $${parsedData.amount || 'N/A'}\nDescripción: ${parsedData.description || 'N/A'}`,
       [
         {
           text: 'Escanear otro',
@@ -53,16 +135,16 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
           onPress: () => resetScanner(),
         },
         {
-          text: 'Ver detalles',
-          onPress: () => showQRDetails(data),
+          text: 'Ver detalles completos',
+          onPress: () => showFullQRDetails(rawData),
         },
       ]
     );
   };
 
-  const showQRDetails = (data: string) => {
+  const showFullQRDetails = (data: string) => {
     Alert.alert(
-      '📋 Información del QR',
+      '📋 Información Completa del QR',
       `Contenido: ${data}\n\nLongitud: ${data.length} caracteres`,
       [
         {
@@ -80,11 +162,11 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
   const resetScanner = () => {
     setScannedData(null);
     setIsScanning(true);
+    setProcessingPayment(false);
   };
 
   // Estados de permisos
   if (!permission) {
-    // Permisos aún no cargados
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#667eea" />
@@ -94,7 +176,6 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   if (!permission.granted) {
-    // Permisos no concedidos
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.title}>📷 Permiso de Cámara</Text>
@@ -112,8 +193,15 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Escanear QR</Text>
+        <Text style={styles.title}>Escanear QR de Pago</Text>
         <Text style={styles.subtitle}>Apunta al código QR del vendedor</Text>
+        
+        {processingPayment && (
+          <View style={styles.processingOverlay}>
+            <ActivityIndicator size="small" color="#fff" />
+            <Text style={styles.processingText}>Procesando pago...</Text>
+          </View>
+        )}
       </View>
 
       {/* Vista de la cámara */}
@@ -121,7 +209,7 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
         <CameraView
           style={styles.camera}
           facing={facing}
-          onBarcodeScanned={isScanning ? handleBarCodeScanned : undefined}
+          onBarcodeScanned={isScanning && !processingPayment ? handleBarCodeScanned : undefined}
           barcodeScannerSettings={{
             barcodeTypes: ['qr', 'pdf417'],
           }}
@@ -137,8 +225,21 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
             
             {/* Instrucciones */}
             <Text style={styles.scanText}>
-              {isScanning ? 'Encuadra el código QR' : '✅ Escaneo completado'}
+              {processingPayment 
+                ? '🔄 Procesando pago...' 
+                : isScanning 
+                  ? 'Encuadra el código QR del vendedor' 
+                  : '✅ Escaneo completado'
+              }
             </Text>
+
+            {/* Overlay de procesamiento */}
+            {processingPayment && (
+              <View style={styles.processingCameraOverlay}>
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={styles.processingCameraText}>Procesando pago...</Text>
+              </View>
+            )}
           </View>
         </CameraView>
       </View>
@@ -146,30 +247,52 @@ const ScannQRScreen: React.FC<Props> = ({ navigation }) => {
       {/* Panel de controles */}
       <View style={styles.controls}>
         <View style={styles.buttonsRow}>
-          <TouchableOpacity style={styles.actionButton} onPress={toggleCameraFacing}>
+          <TouchableOpacity 
+            style={[styles.actionButton, processingPayment && styles.disabledButton]} 
+            onPress={toggleCameraFacing}
+            disabled={processingPayment}
+          >
             <Text style={styles.actionButtonText}>🔄 Cámara</Text>
           </TouchableOpacity>
           
           {!isScanning && (
-            <TouchableOpacity style={styles.actionButton} onPress={resetScanner}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={resetScanner}
+              disabled={processingPayment}
+            >
               <Text style={styles.actionButtonText}>📷 Nuevo Escaneo</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Resultado del escaneo */}
-        {scannedData && (
+        {scannedData && !processingPayment && (
           <View style={styles.resultBox}>
             <Text style={styles.resultTitle}>Último código escaneado:</Text>
-            <Text style={styles.resultData} numberOfLines={2}>
-              {scannedData}
+            <Text style={styles.resultData} numberOfLines={3}>
+              {scannedData.length > 150 
+                ? `${scannedData.substring(0, 150)}...` 
+                : scannedData
+              }
             </Text>
+          </View>
+        )}
+
+        {/* Información de pago procesado */}
+        {processingPayment && (
+          <View style={styles.paymentInfoBox}>
+            <Text style={styles.paymentInfoTitle}>💳 Procesando Pago</Text>
+            <Text style={styles.paymentInfoText}>
+              Estamos procesando tu pago. Serás redirigido a la autorización...
+            </Text>
+            <ActivityIndicator size="small" color="#667eea" style={styles.paymentActivity} />
           </View>
         )}
 
         {/* Información de uso */}
         <Text style={styles.infoText}>
-          Escanea códigos QR de productos, pagos o promociones
+          Escanea códigos QR de pagos para comprar productos
         </Text>
       </View>
     </View>
@@ -198,6 +321,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    position: 'relative',
   },
   title: {
     fontSize: 22,
@@ -209,6 +333,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#ccc',
     textAlign: 'center',
+  },
+  processingOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#667eea',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  processingText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   cameraContainer: {
     flex: 1,
@@ -271,6 +410,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
   },
+  processingCameraOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  processingCameraText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 15,
+  },
   controls: {
     backgroundColor: '#1a1a1a',
     padding: 20,
@@ -289,6 +444,10 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     minWidth: 120,
     alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#4a5568',
+    opacity: 0.6,
   },
   actionButtonText: {
     color: '#fff',
@@ -314,6 +473,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  paymentInfoBox: {
+    backgroundColor: '#2d3748',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#48bb78',
+  },
+  paymentInfoTitle: {
+    color: '#48bb78',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  paymentInfoText: {
+    color: '#a0aec0',
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  paymentActivity: {
+    alignSelf: 'center',
+  },
   infoText: {
     color: '#718096',
     fontSize: 12,
@@ -333,7 +515,6 @@ const styles = StyleSheet.create({
     marginVertical: 20,
     lineHeight: 20,
   },
-  // AÑADE ESTOS ESTILOS FALTANTES:
   button: {
     backgroundColor: '#667eea',
     paddingHorizontal: 30,
