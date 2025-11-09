@@ -1,55 +1,46 @@
-// services/paymentService.ts
-// services/paymentService.ts
-import axios from 'axios';
-
-// Cambia localhost por tu IP local
-const API_BASE_URL = 'http://192.168.14.98:3001'; // ← USA TU IP AQUÍ
+// services/paymentService.js
+const API_BASE_URL = 'http://192.168.14.168:3001';
 
 export const paymentService = {
-  async generatePaymentQR(amount: string, description: string, vendorName: string) {
+  async generatePaymentQR(amount: string, description: string, vendor: any) {
     try {
-      console.log('🌐 Conectando a:', `${API_BASE_URL}/op/generate-qr`);
-      
-      const response = await axios.post(`${API_BASE_URL}/op/generate-qr`, {
-        amount,
-        description,
-        vendorName
-      }, {
-        timeout: 10000, // 10 segundos timeout
+      const response = await fetch(`${API_BASE_URL}/api/generate-payment-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount,
+          description,
+          vendor
+        })
       });
-      
-      console.log('✅ QR generado exitosamente');
-      return response.data;
-    } catch (error: any) {
-      console.error('❌ Error generando QR:', error.message);
-      console.error('URL intentada:', `${API_BASE_URL}/op/generate-qr`);
-      throw error;
-    }
-  },
 
-  async processPayment(qrData: any) {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/op/process-payment`, {
-        qrData
-      }, {
-        timeout: 10000,
-      });
-      return response.data;
-    } catch (error: any) {
-      console.error('Error procesando pago:', error.message);
-      throw error;
-    }
-  },
-
-  async checkServerHealth() {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/health`, {
-        timeout: 5000,
-      });
-      return response.data;
+      const result = await response.json();
+      return result;
     } catch (error) {
-      console.error('Servidor no disponible:', error);
-      throw error;
+      console.error('Error generando QR:', error);
+      return { ok: false, error: 'Error de conexión' };
+    }
+  },
+
+  async startPayment(incomingPaymentId: any) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/op/start-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          incomingPaymentId
+        })
+      });
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error iniciando pago:', error);
+      return { ok: false, error: 'Error de conexión' };
     }
   }
 };

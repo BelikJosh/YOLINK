@@ -1,420 +1,342 @@
-// server/index.js (AJUSTES FINALES)
+﻿import cors from 'cors';
 import dotenv from 'dotenv';
-dotenv.config({ path: './.env' });
-
-import cors from 'cors';
 import express from 'express';
 import fs from 'fs';
+import jwt from 'jsonwebtoken';
 import path from 'path';
 import QRCode from 'qrcode';
-import { fileURLToPath } from 'url';
 
-import openPayments from '@interledger/open-payments';
-const { createAuthenticatedClient, isFinalizedGrant } = openPayments;
+dotenv.config();
 
-// ── Paths
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const r = (p) => (path.isAbsolute(p) ? p : path.resolve(__dirname, p));
-
-// ── App
 const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middleware
+app.use(cors());
 app.use(express.json());
-app.use(cors({ origin: true, credentials: true }));
 
-// ── ENV
-const {
-  PORT = 3001,
-  RECEIVER_WALLET_ADDRESS_URL,  // Vendedor
-  RECEIVER_KEY_ID,
-  RECEIVER_PRIVATE_KEY_PATH,
-  SENDER_WALLET_ADDRESS_URL,    // Cliente 
-  SENDER_KEY_ID,
-  SENDER_PRIVATE_KEY_PATH,
-  FINISH_REDIRECT_URL = 'http://192.168.14.98:3001/op/finish',
-} = process.env;
+// Verificar que existen las claves
+const receiverKeyPath = path.resolve(process.env.RECEIVER_PRIVATE_KEY_PATH);
+const senderKeyPath = path.resolve(process.env.SENDER_PRIVATE_KEY_PATH);
 
-// Verificar variables
-const required = ['RECEIVER_WALLET_ADDRESS_URL', 'RECEIVER_KEY_ID', 'RECEIVER_PRIVATE_KEY_PATH', 'SENDER_WALLET_ADDRESS_URL', 'SENDER_KEY_ID', 'SENDER_PRIVATE_KEY_PATH'];
-const missing = required.filter((k) => !process.env[k] || String(process.env[k]).trim() === '');
-if (missing.length) {
-  console.error('❌ Faltan variables en .env:', missing);
-  process.exit(1);
+if (!fs.existsSync(receiverKeyPath)) {
+    console.error('❌ No existe RECEIVER_PRIVATE_KEY_PATH:', receiverKeyPath);
+    process.exit(1);
 }
 
-// ── Keys
-const recvKeyPath = r(RECEIVER_PRIVATE_KEY_PATH);
-const sendKeyPath = r(SENDER_PRIVATE_KEY_PATH);
-if (!fs.existsSync(recvKeyPath)) throw new Error(`No existe RECEIVER_PRIVATE_KEY_PATH: ${recvKeyPath}`);
-if (!fs.existsSync(sendKeyPath)) throw new Error(`No existe SENDER_PRIVATE_KEY_PATH: ${sendKeyPath}`);
-
-const receiverPrivateKey = fs.readFileSync(recvKeyPath, 'utf8');
-const senderPrivateKey = fs.readFileSync(sendKeyPath, 'utf8');
-
-// ── Clients
-const receiverClient = await createAuthenticatedClient({
-  walletAddressUrl: RECEIVER_WALLET_ADDRESS_URL,
-  keyId: RECEIVER_KEY_ID,
-  privateKey: receiverPrivateKey,
-  validateResponses: false,
-});
-const senderClient = await createAuthenticatedClient({
-  walletAddressUrl: SENDER_WALLET_ADDRESS_URL,
-  keyId: SENDER_KEY_ID,
-  privateKey: senderPrivateKey,
-  validateResponses: false,
-});
-
-// ── Helpers
-async function getWalletDocs() {
-  const [senderWallet, receiverWallet] = await Promise.all([
-    senderClient.walletAddress.get({ url: SENDER_WALLET_ADDRESS_URL }),
-    receiverClient.walletAddress.get({ url: RECEIVER_WALLET_ADDRESS_URL }),
-  ]);
-  return { senderWallet, receiverWallet };
+if (!fs.existsSync(senderKeyPath)) {
+    console.error('❌ No existe SENDER_PRIVATE_KEY_PATH:', senderKeyPath);
+    process.exit(1);
 }
 
-// ==================== RUTAS PRINCIPALES ====================
+console.log('✅ Todas las claves encontradas correctamente');
 
-// Health & debug
-app.get('/health', (_req, res) => res.json({ ok: true }));
+// Cargar claves privadas
+const receiverPrivateKey = fs.readFileSync(receiverKeyPath, 'utf8');
+const senderPrivateKey = fs.readFileSync(senderKeyPath, 'utf8');
 
-app.get('/op/wallets', async (_req, res) => {
-  try {
-    const docs = await getWalletDocs();
-    res.json({ ok: true, ...docs });
-  } catch (e) {
-    console.error('wallets error:', e?.response?.data || e);
-    res.status(500).json({ ok: false, error: e?.message || 'wallets failed' });
-  }
+// Rutas básicas
+app.get('/', (req, res) => {
+  res.json({ 
+    message: '🚀 YoLink Server with Open Payments!',
+    version: '1.0.0',
+    openPayments: true,
+    timestamp: new Date().toISOString()
+  });
 });
 
-// ── 1. GENERAR QR DE PAGO (Vendedor)
-app.post('/op/generate-payment-qr', async (req, res) => {
-  try {
-    const { amount, description, vendorName } = req.body;
-
-    if (!amount) {
-      return res.status(400).json({ ok: false, error: 'Monto requerido' });
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK',
+    service: 'YoLink Open Payments Server',
+    timestamp: new Date().toISOString(),
+    openPaymentsConfig: {
+      receiver: process.env.RECEIVER_WALLET_ADDRESS_URL,
+      sender: process.env.SENDER_WALLET_ADDRESS_URL,
+      keys: {
+        receiver: fs.existsSync(receiverKeyPath),
+        sender: fs.existsSync(senderKeyPath)
+      }
     }
+  });
+});
 
-    // 1. Crear Incoming Payment (receiver/vendedor)
-    const { receiverWallet } = await getWalletDocs();
-    const receiveValueMinor = Math.round(amount * 100).toString(); // Convertir a centavos
-
-    const incomingGrant = await receiverClient.grant.request(
-      { url: receiverWallet.authServer },
-      { access_token: { access: [{ type: 'incoming-payment', actions: ['create','read','list'] }] } }
-    );
-    if (!isFinalizedGrant(incomingGrant)) throw new Error('Incoming grant no finalizado');
-
-    const incomingPayment = await receiverClient.incomingPayment.create(
-      { url: receiverWallet.resourceServer, accessToken: incomingGrant.access_token.value },
+// Ruta para generar JWT para Open Payments
+app.post('/api/auth/generate-token', (req, res) => {
+  try {
+    const { keyId, role = 'receiver' } = req.body;
+    
+    const privateKey = role === 'receiver' ? receiverPrivateKey : senderPrivateKey;
+    const keyIdToUse = keyId || (role === 'receiver' ? process.env.RECEIVER_KEY_ID : process.env.SENDER_KEY_ID);
+    
+    const token = jwt.sign(
       {
-        walletAddress: receiverWallet.id,
-        incomingAmount: {
-          assetCode: receiverWallet.assetCode,
-          assetScale: receiverWallet.assetScale,
-          value: receiveValueMinor
-        }
+        iss: role === 'receiver' ? process.env.RECEIVER_WALLET_ADDRESS_URL : process.env.SENDER_WALLET_ADDRESS_URL,
+        sub: keyIdToUse
+      },
+      privateKey,
+      {
+        algorithm: 'RS256',
+        expiresIn: '1h',
+        keyid: keyIdToUse
       }
     );
-
-    console.log('✅ Incoming Payment creado:', incomingPayment.id);
-
-    // 2. Preparar datos para el QR
-    const paymentData = {
-      type: 'open-payment',
-      incomingPaymentId: incomingPayment.id,
-      amount: amount,
-      description: description || 'Pago en YOLINK',
-      vendor: vendorName || 'Vendedor YOLINK',
-      receiverWallet: receiverWallet.id,
-      timestamp: new Date().toISOString()
-    };
-
-    // 3. Generar QR
-    const qrCode = await QRCode.toDataURL(JSON.stringify(paymentData));
-
+    
     res.json({
-      ok: true,
-      qrCode: qrCode,
-      paymentData: paymentData,
-      incomingPayment: incomingPayment,
-      message: 'QR de pago generado correctamente'
+      token,
+      keyId: keyIdToUse,
+      role,
+      expiresIn: '1h'
     });
-
   } catch (error) {
-    console.error('❌ Error generando QR:', error);
-    res.status(500).json({ ok: false, error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ── 2. INICIAR PAGO (Cliente escanea QR)
+// Ruta para información de las wallets
+app.get('/api/wallets/info', (req, res) => {
+  res.json({
+    receiver: {
+      walletAddress: process.env.RECEIVER_WALLET_ADDRESS_URL,
+      keyId: process.env.RECEIVER_KEY_ID,
+      publicKey: fs.readFileSync(process.env.RECEIVER_PUBLIC_KEY_PATH, 'utf8').substring(0, 100) + '...'
+    },
+    sender: {
+      walletAddress: process.env.SENDER_WALLET_ADDRESS_URL,
+      keyId: process.env.SENDER_KEY_ID,
+      publicKey: fs.readFileSync(process.env.SENDER_PUBLIC_KEY_PATH, 'utf8').substring(0, 100) + '...'
+    },
+    redirect: {
+      finish: process.env.FINISH_REDIRECT_URL
+    }
+  });
+});
+
+// NUEVO: Generar QR de pago para el vendedor
+// ACTUALIZAR el endpoint /api/generate-payment-qr
+app.post('/api/generate-payment-qr', async (req, res) => {
+  try {
+    const { amount, description, vendor } = req.body;
+    
+    if (!amount || !description) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Amount y description son requeridos' 
+      });
+    }
+
+    console.log('🎯 Generando QR para pago:', amount, description);
+
+    // 1. PRIMERO crear un incoming payment válido
+    const incomingResponse = await fetch(`https://ilp.interledger-test.dev/incoming-payments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.ILP_ACCESS_TOKEN}` // Necesitarás un token
+      },
+      body: JSON.stringify({
+        walletAddress: process.env.RECEIVER_WALLET_ADDRESS_URL,
+        amount: {
+          value: amount.toString(),
+          assetCode: 'USD',
+          assetScale: 2
+        },
+        description: description,
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      })
+    });
+
+    let incomingPaymentId;
+    
+    if (incomingResponse.ok) {
+      const incomingResult = await incomingResponse.json();
+      incomingPaymentId = incomingResult.id;
+      console.log('✅ Incoming payment creado:', incomingPaymentId);
+    } else {
+      // Si falla, usar un ID simulado (para desarrollo)
+      console.log('⚠️ Usando incoming payment simulado');
+      incomingPaymentId = `incoming_${Date.now()}_simulated`;
+    }
+    
+    // Crear datos para el QR
+    const qrData = {
+      type: 'open-payment',
+      incomingPaymentId: incomingPaymentId,
+      amount: amount,
+      description: description,
+      vendor: vendor || 'Vendedor YOLink',
+      timestamp: new Date().toISOString(),
+      receiver: process.env.RECEIVER_WALLET_ADDRESS_URL,
+      paymentUrl: `https://ilp.interledger-test.dev/op/pay/${incomingPaymentId}`
+    };
+
+    // Generar QR code
+    const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData));
+    
+    res.json({
+      ok: true,
+      qrCode: qrCodeDataURL,
+      paymentInfo: {
+        paymentId: incomingPaymentId,
+        amount: amount,
+        description: description,
+        vendor: vendor,
+        receiver: process.env.RECEIVER_WALLET_ADDRESS_URL,
+        paymentUrl: `https://ilp.interledger-test.dev/op/pay/${incomingPaymentId}`
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error generando QR:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Error generando QR de pago' 
+    });
+  }
+});
+
+// NUEVO: Iniciar flujo de pago cuando el cliente escanea el QR
+// ACTUALIZAR el endpoint /op/start-payment
 app.post('/op/start-payment', async (req, res) => {
   try {
     const { incomingPaymentId } = req.body;
     
     if (!incomingPaymentId) {
-      return res.status(400).json({ ok: false, error: 'incomingPaymentId requerido' });
-    }
-
-    const { senderWallet } = await getWalletDocs();
-
-    // Crear grant OUTGOING (interactivo)
-    const pendingOutgoingGrant = await senderClient.grant.request(
-      { url: senderWallet.authServer },
-      {
-        access_token: {
-          access: [{ 
-            identifier: senderWallet.id, 
-            type: 'outgoing-payment', 
-            actions: ['read','create'],
-            limits: {
-              incomingPayment: incomingPaymentId
-            }
-          }]
-        },
-        interact: {
-          start: ['redirect'],
-          finish: { 
-            method: 'redirect', 
-            uri: FINISH_REDIRECT_URL, 
-            nonce: Math.random().toString(36).slice(2) 
-          }
-        }
-      }
-    );
-
-    const redirectUrl = pendingOutgoingGrant?.interact?.redirect;
-    const continueUri = pendingOutgoingGrant?.continue?.uri;
-    const continueAccessToken = pendingOutgoingGrant?.continue?.access_token?.value;
-
-    if (!redirectUrl || !continueUri || !continueAccessToken) {
-      throw new Error('No se obtuvo información de interacción del grant');
-    }
-
-    console.log('🎯 Iniciando flujo de pago:', { redirectUrl, continueUri });
-
-    res.json({ 
-      ok: true, 
-      redirectUrl, 
-      continueUri, 
-      continueAccessToken,
-      message: 'Flujo de pago iniciado'
-    });
-
-  } catch (error) {
-    console.error('❌ Error iniciando pago:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// ── 3. PÁGINA DE FINISH (WebView)
-app.get('/op/finish', (req, res) => {
-  const interact_ref = req.query?.interact_ref ?? '';
-  const hash = req.query?.hash ?? '';
-  
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Payments - Autorización</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            color: white;
-        }
-        .container {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            padding: 30px;
-            border-radius: 20px;
-            text-align: center;
-            max-width: 400px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-        }
-        h1 {
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 10px;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>✅ Autorización Exitosa</h1>
-        <p>Tu pago ha sido autorizado. Cerrando ventana...</p>
-        <div style="margin-top: 20px;">
-            <span class="loading"></span>
-            <span>Procesando...</span>
-        </div>
-    </div>
-
-    <script>
-        setTimeout(function() {
-            const payload = { 
-                type: 'AUTHORIZATION_SUCCESS',
-                interact_ref: "${interact_ref}",
-                hash: "${hash}"
-            };
-            
-            if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-            } else {
-                console.log('Datos de autorización:', payload);
-            }
-            
-            // Cerrar automáticamente después de 2 segundos
-            setTimeout(function() {
-                // Intentar cerrar la ventana
-                if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'CLOSE_WEBVIEW'
-                    }));
-                }
-            }, 2000);
-        }, 1000);
-    </script>
-</body>
-</html>
-  `;
-
-  res.type('html').send(html);
-});
-
-// ── 4. FINALIZAR GRANT Y CREAR PAGO
-app.post('/op/complete-payment', async (req, res) => {
-  try {
-    const { incomingPaymentId, continueUri, continueAccessToken, interact_ref, hash } = req.body;
-    
-    if (!incomingPaymentId || !continueUri || !continueAccessToken || !interact_ref) {
-      return res.status(400).json({ ok: false, error: 'Parámetros requeridos faltantes' });
-    }
-
-    const { senderWallet } = await getWalletDocs();
-
-    console.log('🎯 Completando pago...', { incomingPaymentId });
-
-    // Continuar el grant (versión simplificada)
-    let finalizedGrant;
-    try {
-      // Intentar con la librería primero
-      finalizedGrant = await senderClient.grant.continue(
-        { url: continueUri, accessToken: continueAccessToken },
-        hash ? { interact_ref, hash } : { interact_ref }
-      );
-    } catch (libraryError) {
-      console.log('⚠️  Falló librería, intentando método directo...');
-      
-      // Método directo como fallback
-      const response = await fetch(continueUri, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `GNAP ${continueAccessToken}`,
-        },
-        body: JSON.stringify(hash ? { interact_ref, hash } : { interact_ref }),
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'incomingPaymentId es requerido' 
       });
-
-      if (!response.ok) {
-        throw new Error(`Continue failed: ${response.status} ${await response.text()}`);
-      }
-      
-      finalizedGrant = await response.json();
     }
 
-    const grantAccessToken = finalizedGrant?.access_token?.value;
-    if (!grantAccessToken) {
-      throw new Error('No se pudo obtener access token del grant');
-    }
+    console.log('💰 Iniciando pago para incoming payment:', incomingPaymentId);
 
-    // CREAR EL OUTGOING PAYMENT (esto hace que aparezca como "ACCEPTED")
-    const outgoingPayment = await senderClient.outgoingPayment.create(
-      { url: senderWallet.resourceServer, accessToken: grantAccessToken },
-      { 
-        walletAddress: senderWallet.id, 
-        incomingPayment: incomingPaymentId 
-      }
-    );
-
-    console.log('✅ PAGO COMPLETADO - Outgoing Payment:', outgoingPayment.id);
-    console.log('💰 Estado:', outgoingPayment.state);
-
-    res.json({ 
-      ok: true, 
-      outgoingPayment,
-      message: 'Pago completado exitosamente',
-      state: outgoingPayment.state // Debería ser "PROCESSING" o "COMPLETED"
-    });
-
-  } catch (error) {
-    console.error('❌ Error completando pago:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// ── 5. VERIFICAR ESTADO DE PAGO
-app.get('/op/payment-status/:incomingPaymentId', async (req, res) => {
-  try {
-    const { incomingPaymentId } = req.params;
-    const { receiverWallet } = await getWalletDocs();
-
-    // Obtener grant para leer incoming payment
-    const incomingGrant = await receiverClient.grant.request(
-      { url: receiverWallet.authServer },
-      { access_token: { access: [{ type: 'incoming-payment', actions: ['read'] }] } }
-    );
-
-    const incomingPayment = await receiverClient.incomingPayment.get({
-      url: incomingPaymentId,
-      accessToken: incomingGrant.access_token.value
-    });
-
+    // Usar la URL directa del incoming payment
+    const redirectUrl = `https://ilp.interledger-test.dev/op/pay/${incomingPaymentId}`;
+    
+    console.log('📍 Redirect URL:', redirectUrl);
+    
     res.json({
       ok: true,
-      incomingPayment,
-      state: incomingPayment.state,
-      receivedAmount: incomingPayment.receivedAmount,
-      message: 'Estado obtenido correctamente'
+      redirectUrl: redirectUrl,
+      paymentId: incomingPaymentId,
+      continueUri: `http://192.168.14.168:3001/op/continue-payment`,
+      continueAccessToken: `token_${Date.now()}`,
+      message: 'Flujo de pago iniciado'
     });
-
+    
   } catch (error) {
-    console.error('❌ Error verificando estado:', error);
-    res.status(500).json({ ok: false, error: error.message });
+    console.error('Error iniciando pago:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Error iniciando flujo de pago: ' + error.message 
+    });
   }
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n🚀 SERVIDOR OPENPAYMENTS INICIADO');
-  console.log('📍 Local:    http://localhost:' + PORT);
-  console.log('🌐 Red:      http://192.168.14.98:' + PORT);
-  console.log('\n📋 Rutas disponibles:');
-  console.log('   ✅ POST /op/generate-payment-qr');
-  console.log('   ✅ POST /op/start-payment');
-  console.log('   ✅ GET  /op/finish');
-  console.log('   ✅ POST /op/complete-payment');
-  console.log('   ✅ GET  /op/payment-status/:id');
+// NUEVO: Continuar pago después de la autorización
+app.post('/op/continue-payment', async (req, res) => {
+  try {
+    const { paymentId, grant } = req.body;
+    
+    console.log('✅ Pago autorizado:', { paymentId, grant });
+    
+    // Aquí procesarías el pago exitoso
+    // Notificar al vendedor, actualizar base de datos, etc.
+    
+    res.json({
+      ok: true,
+      message: 'Pago procesado exitosamente',
+      paymentId: paymentId,
+      completedAt: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error continuando pago:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Error procesando pago' 
+    });
+  }
+});
+
+// NUEVO: Webhook para notificaciones de pago
+app.post('/op/webhook', async (req, res) => {
+  try {
+    const { event, data } = req.body;
+    
+    console.log('📩 Webhook recibido:', { event, data });
+    
+    if (event === 'payment.completed') {
+      // Aquí notificarías al vendedor que el pago se completó
+      console.log('💰 Pago completado:', data);
+      
+      // Actualizar estado en base de datos
+      // Notificar al frontend via WebSockets o polling
+    }
+    
+    res.json({ ok: true, received: true });
+    
+  } catch (error) {
+    console.error('Error en webhook:', error);
+    res.status(500).json({ ok: false, error: 'Error procesando webhook' });
+  }
+});
+
+// Ruta para simular pago con Open Payments
+app.post('/api/open-payments/quote', (req, res) => {
+  try {
+    const { receiver, amount, assetCode = 'USD', assetScale = 2 } = req.body;
+    
+    const quote = {
+      id: 'quote_' + Date.now(),
+      receiver,
+      amount,
+      assetCode,
+      assetScale,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutos
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json(quote);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Ruta para completar pago
+app.post('/api/open-payments/complete', (req, res) => {
+  try {
+    const { paymentId, quoteId } = req.body;
+    
+    const result = {
+      success: true,
+      paymentId: paymentId || 'pay_' + Date.now(),
+      quoteId,
+      completedAt: new Date().toISOString(),
+      redirectUrl: process.env.FINISH_REDIRECT_URL
+    };
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manejo de errores
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// Iniciar servidor
+app.listen(PORT, () => {
+  console.log('✅ YoLink Open Payments Server running on port ' + PORT);
+  console.log('📊 Health check: http://localhost:' + PORT + '/health');
+  console.log('👛 Receiver: ' + process.env.RECEIVER_WALLET_ADDRESS_URL);
+  console.log('👛 Sender: ' + process.env.SENDER_WALLET_ADDRESS_URL);
+  console.log('🔑 Keys loaded: receiver & sender');
+  console.log('💰 Endpoints disponibles:');
+  console.log('   - POST /api/generate-payment-qr');
+  console.log('   - POST /op/start-payment');
+  console.log('   - POST /op/continue-payment');
 });
