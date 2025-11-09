@@ -1,14 +1,37 @@
-// aws-config.ts - ACTUALIZADO
+// aws-config.ts
 import AWS from 'aws-sdk';
 
-const config = {
-  region: 'us-east-1',
-  accessKeyId: '',
-  secretAccessKey: '',
+// CONFIGURACIÓN MANUAL - Reemplaza react-native-config
+const MANUAL_CONFIG = {
+  AWS_REGION: 'us-east-1',
+  AWS_ACCESS_KEY_ID: '',
+  AWS_SECRET_ACCESS_KEY: '',
+  DYNAMODB_TABLE: 'YOLINK',
+  GOOGLE_MAPS_API_KEY: ''
+};
+
+// Verificar configuración
+console.log('🔑 Manual AWS Config:', {
+  region: MANUAL_CONFIG.AWS_REGION,
+  hasAccessKey: !!MANUAL_CONFIG.AWS_ACCESS_KEY_ID,
+  hasSecretKey: !!MANUAL_CONFIG.AWS_SECRET_ACCESS_KEY,
+  table: MANUAL_CONFIG.DYNAMODB_TABLE
+});
+
+const awsConfig = {
+  region: MANUAL_CONFIG.AWS_REGION,
+  accessKeyId: MANUAL_CONFIG.AWS_ACCESS_KEY_ID,
+  secretAccessKey: MANUAL_CONFIG.AWS_SECRET_ACCESS_KEY,
   correctClockSkew: true,
 };
 
-AWS.config.update(config);
+// Validar credenciales
+if (!awsConfig.accessKeyId || !awsConfig.secretAccessKey) {
+  console.error('❌ AWS credentials missing');
+} else {
+  console.log('✅ AWS credentials loaded successfully');
+  AWS.config.update(awsConfig);
+}
 
 export const dynamodb = new AWS.DynamoDB.DocumentClient({
   correctClockSkew: true,
@@ -18,24 +41,20 @@ export const dynamodb = new AWS.DynamoDB.DocumentClient({
   }
 });
 
-export const TABLE_NAME = 'YOLINK';
+export const TABLE_NAME = MANUAL_CONFIG.DYNAMODB_TABLE;
+export const GOOGLE_MAPS_API_KEY = MANUAL_CONFIG.GOOGLE_MAPS_API_KEY;
 
-// Interface actualizada - SIN ColeccionID
+// Interfaces
 export interface UserData {
-  // CLAVE PRINCIPAL (igual que tu ejemplo)
   id: string;
-  
-  // Campos principales
   userType: 'client' | 'vendor';
   nombre: string;
-  email: string; // Cambié de 'correo' a 'email' para consistencia
+  email: string;
   password: string;
   walletOpenPay: string;
   fechaRegistro: string;
   rating?: number;
   reseñasCount?: number;
-  
-  // Campos de cliente
   comprasRealizadas?: number;
   totalGastado?: number;
   ubicacionActual?: {
@@ -46,8 +65,6 @@ export interface UserData {
     intereses: string[];
     radioBusqueda: number;
   };
-  
-  // Campos de vendedor
   ventasRealizadas?: number;
   totalGanado?: number;
   categoria?: string;

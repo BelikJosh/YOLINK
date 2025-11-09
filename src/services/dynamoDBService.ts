@@ -1,8 +1,16 @@
-// dynamoDBService.ts - ACTUALIZADO (similar a tu ejemplo)
+// services/dynamoDBService.ts
 import { dynamodb, TABLE_NAME, UserData, CreateUserResponse } from '../aws-config';
 
 export const dynamoDBService = {
   async createUser(userData: UserData): Promise<CreateUserResponse> {
+    // Validar que tenemos conexión a DynamoDB
+    if (!dynamodb) {
+      return { 
+        success: false, 
+        error: 'DynamoDB not configured' 
+      };
+    }
+
     const params = {
       TableName: TABLE_NAME,
       Item: userData
@@ -15,23 +23,28 @@ export const dynamoDBService = {
       console.error('Error creating user:', error);
       return { 
         success: false, 
-        error: error.message || 'Unknown error' 
+        error: error.message || 'Unknown error creating user' 
       };
     }
   },
 
   async checkEmailExists(email: string): Promise<boolean> {
-    // PRIMERO intentar con QUERY (índice secundario)
-    const queryParams = {
-      TableName: TABLE_NAME,
-      IndexName: 'EmailIndex',
-      KeyConditionExpression: 'email = :email',
-      ExpressionAttributeValues: {
-        ':email': email.toLowerCase().trim()
-      }
-    };
+    if (!dynamodb) {
+      console.error('DynamoDB not configured in checkEmailExists');
+      return false;
+    }
 
     try {
+      // Primero intentar con query (índice secundario)
+      const queryParams = {
+        TableName: TABLE_NAME,
+        IndexName: 'EmailIndex',
+        KeyConditionExpression: 'email = :email',
+        ExpressionAttributeValues: {
+          ':email': email.toLowerCase().trim()
+        }
+      };
+
       console.log('🔍 Buscando email con query...');
       const result = await dynamodb.query(queryParams).promise();
       return result.Items ? result.Items.length > 0 : false;
@@ -57,7 +70,62 @@ export const dynamoDBService = {
     }
   },
 
+  async loginUser(email: string, password: string): Promise<{ 
+    success: boolean; 
+    user?: any; 
+    error?: string 
+  }> {
+    // Validar configuración primero
+    if (!dynamodb) {
+      return { 
+        success: false, 
+        error: 'Database not configured. Please check AWS credentials.' 
+      };
+    }
+
+    try {
+      console.log('🔐 Attempting login for:', email);
+      
+      // PRIMERO buscar por email usando scan (más confiable)
+      const scanParams = {
+        TableName: TABLE_NAME,
+        FilterExpression: 'email = :email',
+        ExpressionAttributeValues: {
+          ':email': email.toLowerCase().trim()
+        }
+      };
+
+      console.log('📋 Scanning for user...');
+      const scanResult = await dynamodb.scan(scanParams).promise();
+      
+      if (scanResult.Items && scanResult.Items.length > 0) {
+        const user = scanResult.Items[0];
+        console.log('👤 User found:', user.nombre);
+        
+        if (user.password === password) {
+          console.log('✅ Login successful for:', user.nombre);
+          return { success: true, user };
+        } else {
+          console.log('❌ Invalid password for:', user.nombre);
+          return { success: false, error: 'Contraseña incorrecta' };
+        }
+      } else {
+        console.log('❌ User not found:', email);
+        return { success: false, error: 'Usuario no encontrado' };
+      }
+    } catch (error: any) {
+      console.error('💥 Error during login:', error);
+      return { 
+        success: false, 
+        error: 'Error de conexión con la base de datos: ' + error.message 
+      };
+    }
+  },
+
+  // Métodos auxiliares...
   async getAllUsers(): Promise<any[]> {
+    if (!dynamodb) return [];
+    
     const params = {
       TableName: TABLE_NAME
     };
@@ -72,7 +140,8 @@ export const dynamoDBService = {
   },
 
   async getUserById(userId: string): Promise<any> {
-    // AHORA USA GET ITEM (más eficiente)
+    if (!dynamodb) return null;
+    
     const params = {
       TableName: TABLE_NAME,
       Key: {
@@ -86,77 +155,6 @@ export const dynamoDBService = {
     } catch (error) {
       console.error('Error getting user by ID:', error);
       return null;
-    }
-  },
-
-  async getUsersByType(userType: 'client' | 'vendor'): Promise<any[]> {
-    // USANDO ÍNDICE SECUNDARIO
-    const params = {
-      TableName: TABLE_NAME,
-      IndexName: 'UserTypeIndex',
-      KeyConditionExpression: 'userType = :userType',
-      ExpressionAttributeValues: {
-        ':userType': userType
-      }
-    };
-
-    try {
-      const result = await dynamodb.query(params).promise();
-      return result.Items || [];
-    } catch (error) {
-      console.error('Error getting users by type:', error);
-      return [];
-    }
-  },
-
-  async loginUser(email: string, password: string): Promise<{ success: boolean; user?: any; error?: string }> {
-    try {
-      // PRIMERO buscar por email usando índice
-      const emailParams = {
-        TableName: TABLE_NAME,
-        IndexName: 'EmailIndex',
-        KeyConditionExpression: 'email = :email',
-        ExpressionAttributeValues: {
-          ':email': email.toLowerCase().trim()
-        }
-      };
-
-      const emailResult = await dynamodb.query(emailParams).promise();
-      
-      if (emailResult.Items && emailResult.Items.length > 0) {
-        const user = emailResult.Items[0];
-        if (user.password === password) {
-          return { success: true, user };
-        } else {
-          return { success: false, error: 'Contraseña incorrecta' };
-        }
-      } else {
-        return { success: false, error: 'Usuario no encontrado' };
-      }
-    } catch (error: any) {
-      console.error('Error during login:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Unknown error' 
-      };
-    }
-  },
-
-  // MÉTODO PARA VER TODOS LOS USUARIOS
-  async listAllUsers(): Promise<any[]> {
-    try {
-      const users = await this.getAllUsers();
-      
-      // Ordenar por tipo y fecha
-      return users.sort((a, b) => {
-        if (a.userType !== b.userType) {
-          return a.userType === 'vendor' ? -1 : 1;
-        }
-        return new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime();
-      });
-    } catch (error) {
-      console.error('Error listing users:', error);
-      return [];
     }
   }
 };
