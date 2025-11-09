@@ -1,12 +1,13 @@
+// screens/LoginScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   Alert,
   ActivityIndicator,
+  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView
@@ -28,20 +29,30 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Por favor ingresa tu email y contraseña');
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Por favor completa todos los campos');
       return;
     }
 
     setLoading(true);
-    
+
     try {
-      // Aquí integrarías con tu servicio de DynamoDB
       const result = await dynamoDBService.loginUser(email, password);
       
-      if (result.success) {
-        Alert.alert('¡Bienvenido!', `Hola ${result.user?.nombre}`);
-        navigation.navigate('Home', { user: result.user });
+      if (result.success && result.user) {
+        // Navegar al Home correspondiente según el rol
+        navigation.navigate('Home', { 
+          user: {
+            id: result.user.id,
+            name: result.user.nombre,
+            email: result.user.email,
+            role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
+            userType: result.user.userType,
+            ...result.user
+          }
+        });
+        
+        Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
       } else {
         Alert.alert('Error', result.error || 'Credenciales incorrectas');
       }
@@ -53,38 +64,26 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleCreateAccount = () => {
-    navigation.navigate('CreateAccount');
-  };
-
-  const handleGoogleSignIn = () => {
-    // Integración con Google Sign-In
-    Alert.alert('Google Sign-In', 'Funcionalidad de Google Sign-In');
-  };
-
   return (
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
           <Text style={styles.title}>YOLINK</Text>
-          <Text style={styles.subtitle}>Login</Text>
+          <Text style={styles.subtitle}>Iniciar Sesión</Text>
         </View>
 
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Correo Electrónico</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ingresa tu email"
-              placeholderTextColor="#999"
               value={email}
               onChangeText={setEmail}
+              placeholder="tucorreo@ejemplo.com"
+              placeholderTextColor="#999"
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -96,12 +95,11 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             <View style={styles.passwordContainer}>
               <TextInput
                 style={[styles.input, styles.passwordInput]}
-                placeholder="••••••••"
-                placeholderTextColor="#999"
                 value={password}
                 onChangeText={setPassword}
+                placeholder="Ingresa tu contraseña"
+                placeholderTextColor="#999"
                 secureTextEntry={!showPassword}
-                autoCapitalize="none"
                 autoComplete="password"
               />
               <TouchableOpacity 
@@ -116,38 +114,32 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
           </View>
 
           <TouchableOpacity 
-            style={[styles.entrarButton, loading && styles.buttonDisabled]}
+            style={[styles.loginButton, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.entrarButtonText}>Entrar</Text>
+              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
             )}
           </TouchableOpacity>
 
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>o</Text>
-            <View style={styles.divider} />
-          </View>
-
           <TouchableOpacity 
-            style={styles.googleButton}
-            onPress={handleGoogleSignIn}
+            style={styles.forgotPassword}
+            onPress={() => Alert.alert('Recuperar Contraseña', 'Funcionalidad en desarrollo')}
           >
-            <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
           </TouchableOpacity>
 
-          <View style={styles.createAccountContainer}>
+          <TouchableOpacity 
+            style={styles.createAccountButton}
+            onPress={() => navigation.navigate('CreateAccount')}
+          >
             <Text style={styles.createAccountText}>
-              ¿No tienes cuenta?{' '}
-              <Text style={styles.createAccountLink} onPress={handleCreateAccount}>
-                Crear Cuenta
-              </Text>
+              ¿No tienes cuenta? <Text style={styles.createAccountLink}>Crear Cuenta</Text>
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -159,35 +151,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  scrollContent: {
+  scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 50,
   },
   title: {
     fontSize: 36,
     fontWeight: 'bold',
     color: '#667eea',
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 10,
   },
   subtitle: {
     fontSize: 24,
+    color: '#333',
     fontWeight: '600',
-    color: '#1a1a1a',
-    textAlign: 'center',
   },
   formContainer: {
     width: '100%',
-    maxWidth: 400,
-    alignSelf: 'center',
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   label: {
     fontSize: 16,
@@ -219,22 +207,19 @@ const styles = StyleSheet.create({
   eyeButtonText: {
     fontSize: 16,
   },
-  entrarButton: {
+  loginButton: {
     backgroundColor: '#667eea',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     shadowColor: '#667eea',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
-  entrarButtonText: {
+  loginButtonText: {
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
@@ -242,51 +227,21 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-  dividerContainer: {
-    flexDirection: 'row',
+  forgotPassword: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e1e5e9',
-  },
-  dividerText: {
-    paddingHorizontal: 16,
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  googleButton: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e1e5e9',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  googleButtonText: {
-    color: '#333',
+  forgotPasswordText: {
+    color: '#667eea',
     fontSize: 16,
-    fontWeight: '600',
   },
-  createAccountContainer: {
+  createAccountButton: {
     alignItems: 'center',
+    padding: 10,
   },
   createAccountText: {
     fontSize: 16,
     color: '#666',
-    textAlign: 'center',
   },
   createAccountLink: {
     color: '#667eea',
