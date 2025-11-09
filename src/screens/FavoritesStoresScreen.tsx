@@ -1,14 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const FavoritesStoresScreen = ({ route, navigation }: any) => {
   const [favorites, setFavorites] = useState<any[]>([]);
 
-  // Si llega una nueva tienda, agregarla
-  if (route?.params?.store && !favorites.some(f => f.id === route.params.store.id)) {
-    setFavorites((prev) => [...prev, route.params.store]);
-  }
+  useEffect(() => {
+    if (route?.params?.store) {
+      const newStore = route.params.store;
+      setFavorites((prev) => {
+        if (!prev.some((f) => f.id === newStore.id)) {
+          return [...prev, newStore];
+        }
+        return prev;
+      });
+    }
+  }, [route?.params?.store]);
 
   const handleRoute = (store: any) => {
     navigation.navigate('Explore', { store });
@@ -33,7 +40,7 @@ const FavoritesStoresScreen = ({ route, navigation }: any) => {
                 onPress={() => handleRoute(item)}
               >
                 <Ionicons name="navigate" size={18} color="#fff" />
-                <Text style={styles.btnText}>Ver Ruta</Text>
+                <Text style={styles.btnText}>Comenzar ruta</Text>
               </TouchableOpacity>
             </View>
           )}

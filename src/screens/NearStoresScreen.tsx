@@ -18,7 +18,22 @@ const NearStoresScreen = ({ navigation }: any) => {
       latitude: 19.4356,
       longitude: -99.1402,
     },
+    {
+      id: '3',
+      name: 'Mercado Verde',
+      address: 'Insurgentes Sur 789, CDMX',
+      latitude: 19.4278,
+      longitude: -99.1502,
+    },
   ];
+
+  const handleRoute = (store: any) => {
+    navigation.navigate('Explore', { store });
+  };
+
+  const handleFavorite = (store: any) => {
+    navigation.navigate('Favorites', { store });
+  };
 
   return (
     <View style={styles.container}>
@@ -34,7 +49,7 @@ const NearStoresScreen = ({ navigation }: any) => {
             <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.routeButton}
-                onPress={() => navigation.navigate('Explore', { store: item })}
+                onPress={() => handleRoute(item)}
               >
                 <Ionicons name="navigate" size={18} color="#fff" />
                 <Text style={styles.btnText}>Trazar Ruta</Text>
@@ -42,7 +57,7 @@ const NearStoresScreen = ({ navigation }: any) => {
 
               <TouchableOpacity
                 style={styles.favoriteButton}
-                onPress={() => navigation.navigate('Favorites', { store: item })}
+                onPress={() => handleFavorite(item)}
               >
                 <Ionicons name="heart" size={18} color="#fff" />
                 <Text style={styles.btnText}>Agregar a Favoritos</Text>
