@@ -29,33 +29,17 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // En tu LoginScreen, en la función handleLogin:
-const handleLogin = async () => {
-  if (!email.trim() || !password.trim()) {
-    Alert.alert('Error', 'Por favor completa todos los campos');
-    return;
-  }
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Por favor completa todos los campos');
+      return;
+    }
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const result = await dynamoDBService.loginUser(email, password);
+    try {
+      const result = await dynamoDBService.loginUser(email, password);
 
-    if (result.success && result.user) {
-      console.log('✅ Login exitoso, guardando usuario...', result.user);
-      
-      // GUARDAR EN ASYNC STORAGE - ESTO ES LO QUE FALTA
-      await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
-      console.log('💾 Usuario guardado en AsyncStorage');
-
-      Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
-
-      // Navegar al tab correspondiente
-     if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
-  navigation.navigate('VendorTabs', { user: result.user });
-} else {
-  navigation.navigate('ClientTabs', { user: result.user });
-}
       if (result.success && result.user) {
         // Crear objeto user con los datos del resultado
         const user = {
@@ -83,17 +67,16 @@ const handleLogin = async () => {
         } else {
           navigation.navigate('ClientTabs', { user });
         }
-
-    } else {
-      Alert.alert('Error', result.error || 'Credenciales incorrectas');
+      } else {
+        Alert.alert('Error', result.error || 'Credenciales incorrectas');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Error al conectar con el servidor');
+      console.error('Login error:', error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    Alert.alert('Error', 'Error al conectar con el servidor');
-    console.error('Login error:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <KeyboardAvoidingView
@@ -177,7 +160,6 @@ const handleLogin = async () => {
   );
 };
 
-// Los estilos se mantienen igual...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
