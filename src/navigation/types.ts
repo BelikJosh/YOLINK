@@ -5,6 +5,10 @@ export type RootStackParamList = {
   VendorTabs: { user: any };
   Profile: { user: any };
   Settings: undefined;
+  Cobrar: undefined;
+  GenerarQR: undefined;
+  AgregarProducto: undefined;
+  HistorialVentas: undefined;
 };
 
 export type ClientTabParamList = {

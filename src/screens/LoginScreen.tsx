@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { RootStackParamList } from '../navigation/Appnavigator';
 import { dynamoDBService } from '../services/dynamoDBService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -28,50 +29,44 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
-      return;
+  // En tu LoginScreen, en la función handleLogin:
+const handleLogin = async () => {
+  if (!email.trim() || !password.trim()) {
+    Alert.alert('Error', 'Por favor completa todos los campos');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const result = await dynamoDBService.loginUser(email, password);
+
+    if (result.success && result.user) {
+      console.log('✅ Login exitoso, guardando usuario...', result.user);
+      
+      // GUARDAR EN ASYNC STORAGE - ESTO ES LO QUE FALTA
+      await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
+      console.log('💾 Usuario guardado en AsyncStorage');
+
+      Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
+
+      // Navegar al tab correspondiente
+     if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
+  navigation.navigate('VendorTabs', { user: result.user });
+} else {
+  navigation.navigate('ClientTabs', { user: result.user });
+}
+
+    } else {
+      Alert.alert('Error', result.error || 'Credenciales incorrectas');
     }
-
-    setLoading(true);
-
-    try {
-      const result = await dynamoDBService.loginUser(email, password);
-
-      if (result.success && result.user) {
-        // Crear objeto user con los datos del resultado
-        const user = {
-          id: result.user.id,
-          name: result.user.nombre,
-          email: result.user.email,
-          role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
-          userType: result.user.userType,
-          ...result.user
-        };
-
-        Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
-
-        // Navegar al tab correspondiente según el tipo de usuario
-        if (result.user.userType === 'client' || result.user.userType === 'cliente') {
-          navigation.navigate('ClientTabs', { user });
-        } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
-          navigation.navigate('VendorTabs', { user });
-        } else {
-          // Por defecto, si no se reconoce el tipo, ir a cliente
-          navigation.navigate('ClientTabs', { user });
-        }
-
-      } else {
-        Alert.alert('Error', result.error || 'Credenciales incorrectas');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Error al conectar con el servidor');
-      console.error('Login error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (error) {
+    Alert.alert('Error', 'Error al conectar con el servidor');
+    console.error('Login error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView
