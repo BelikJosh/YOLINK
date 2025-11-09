@@ -1,27 +1,18 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
-import { Text, View } from 'react-native'; // Añade esta importación
+import { Text } from 'react-native';
 import HomeScreenClient from '../screens/HomeScreenClient';
 import ProfileScreen from '../screens/ProfileScreen';
+import ScannQRScreen from '../screens/ScannQRScreen';
 import { ClientTabParamList } from './types';
 
 // Screens placeholder
 const NearStoresScreen = () => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-    <Text>Tiendas Cercanas - En desarrollo</Text>
-  </View>
-);
-
-const ScannQRScreen = () => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-    <Text>Escanear QR - En desarrollo</Text>
-  </View>
+  <Text style={{ textAlign: 'center', marginTop: 20 }}>Tiendas Cercanas - En desarrollo</Text>
 );
 
 const FavoritesStoresScreen = () => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-    <Text>Favoritos - En desarrollo</Text>
-  </View>
+  <Text style={{ textAlign: 'center', marginTop: 20 }}>Favoritos - En desarrollo</Text>
 );
 
 const Tab = createBottomTabNavigator<ClientTabParamList>();
@@ -33,7 +24,22 @@ const TextIcon = ({ emoji, focused }: { emoji: string, focused: boolean }) => (
   </Text>
 );
 
-const ClientTabNavigator = () => {
+// Componente wrapper para ProfileScreen que pasa navigation y route
+const ProfileScreenWrapper = (props: any) => {
+  return <ProfileScreen {...props} />;
+};
+
+// Componente wrapper para HomeScreenClient
+const HomeScreenClientWrapper = (props: any) => {
+  return <HomeScreenClient {...props} />;
+};
+
+const ClientTabNavigator = ({ route }: any) => {
+  // Obtener el usuario de los parámetros de navegación
+  const user = route?.params?.user;
+
+  console.log('👤 Usuario en ClientTabNavigator:', user);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -55,10 +61,12 @@ const ClientTabNavigator = () => {
           fontWeight: 'bold',
         },
       }}
+      initialParams={{ user }} // Pasa el usuario como parámetro inicial a todos los screens
     >
-      <Tab.Screen 
-        name="Explore" 
-        component={HomeScreenClient}
+      <Tab.Screen
+        name="Explore"
+        component={HomeScreenClientWrapper}
+        initialParams={{ user }}
         options={{
           title: 'Explorar',
           tabBarIcon: ({ focused }) => (
@@ -66,8 +74,8 @@ const ClientTabNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen 
-        name="Near" 
+      <Tab.Screen
+        name="Near"
         component={NearStoresScreen}
         options={{
           title: 'Cercanos',
@@ -76,8 +84,8 @@ const ClientTabNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen 
-        name="Scann" 
+      <Tab.Screen
+        name="Scann"
         component={ScannQRScreen}
         options={{
           title: 'Escanear',
@@ -86,8 +94,8 @@ const ClientTabNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen 
-        name="Favorites" 
+      <Tab.Screen
+        name="Favorites"
         component={FavoritesStoresScreen}
         options={{
           title: 'Favoritos',
@@ -96,9 +104,10 @@ const ClientTabNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen 
-        name="ProfileClient" 
-        component={ProfileScreen}
+      <Tab.Screen
+        name="ProfileClient"
+        component={ProfileScreenWrapper}
+        initialParams={{ user }}
         options={{
           title: 'Perfil',
           tabBarIcon: ({ focused }) => (

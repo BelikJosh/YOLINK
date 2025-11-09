@@ -29,50 +29,48 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
-      return;
-    }
+  if (!email.trim() || !password.trim()) {
+    Alert.alert('Error', 'Por favor completa todos los campos');
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const result = await dynamoDBService.loginUser(email, password);
+  try {
+    const result = await dynamoDBService.loginUser(email, password);
 
-      if (result.success && result.user) {
-        // Crear objeto user con los datos del resultado
-        const user = {
-          id: result.user.id,
-          name: result.user.nombre,
-          email: result.user.email,
-          role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
-          userType: result.user.userType,
-          ...result.user
-        };
+    if (result.success && result.user) {
+      // Crear objeto user con los datos del resultado
+      const user = {
+        id: result.user.id,
+        name: result.user.nombre,
+        email: result.user.email,
+        role: result.user.userType === 'vendor' ? 'Vendedor' : 'Cliente',
+        userType: result.user.userType,
+        ...result.user // Esto incluye todos los campos adicionales
+      };
 
-        Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
+      Alert.alert('¡Bienvenido!', `Hola ${result.user.nombre}`);
 
-        // Navegar al tab correspondiente según el tipo de usuario
-        if (result.user.userType === 'client' || result.user.userType === 'cliente') {
-          navigation.navigate('ClientTabs', { user });
-        } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
-          navigation.navigate('VendorTabs', { user });
-        } else {
-          // Por defecto, si no se reconoce el tipo, ir a cliente
-          navigation.navigate('ClientTabs', { user });
-        }
-
+      // Navegar al tab correspondiente según el tipo de usuario
+      if (result.user.userType === 'client' || result.user.userType === 'cliente') {
+        navigation.navigate('ClientTabs', { user }); // ← Asegúrate de pasar el user completo
+      } else if (result.user.userType === 'vendor' || result.user.userType === 'vendedor') {
+        navigation.navigate('VendorTabs', { user });
       } else {
-        Alert.alert('Error', result.error || 'Credenciales incorrectas');
+        navigation.navigate('ClientTabs', { user });
       }
-    } catch (error) {
-      Alert.alert('Error', 'Error al conectar con el servidor');
-      console.error('Login error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
+    } else {
+      Alert.alert('Error', result.error || 'Credenciales incorrectas');
+    }
+  } catch (error) {
+    Alert.alert('Error', 'Error al conectar con el servidor');
+    console.error('Login error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <KeyboardAvoidingView
       style={styles.container}
