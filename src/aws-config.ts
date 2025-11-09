@@ -82,6 +82,39 @@ export interface UserData {
   descripcion?: string;
 }
 
+export interface Producto {
+  id: string;
+  vendedorId: string;
+  nombre: string;
+  descripcion: string;
+  precio: number;
+  categoria: string;
+  imagen?: string;
+  stock: number;
+  fechaCreacion: string;
+  activo: boolean;
+}
+
+export interface Venta {
+  id: string;
+  vendedorId: string;
+  clienteId?: string;
+  productos: ProductoVendido[];
+  total: number;
+  fecha: string;
+  estado: 'pendiente' | 'completada' | 'cancelada';
+  qrCode?: string; // Agrega esta línea - hace que qrCode sea opcional
+}
+
+export interface ProductoVendido {
+  productoId: string;
+  nombre: string;
+  precio: number;
+  cantidad: number;
+  subtotal: number;
+}
+
+
 export interface CreateUserResponse {
   success: boolean;
   user?: UserData;
