@@ -2,13 +2,21 @@ import { createStackNavigator } from '@react-navigation/stack';
 import React from 'react';
 import CreateAccount from '../screens/CreateAccount';
 import LoginScreen from '../screens/LoginScreen';
+import MapLocationPicker from '../screens/MapLocationPicker';
 import ClientTabNavigator from './ClientTabNavigator';
 import VendorTabNavigator from './VendorTabNavigator';
 
-// Definir los tipos de parámetros para cada pantalla
+// Definir tipos de parámetros para cada pantalla
 export type RootStackParamList = {
   Login: undefined;
   CreateAccount: undefined;
+  MapLocationPicker: {
+    onLocationSelected: (location: {
+      address: string;
+      lat: number;
+      lng: number;
+    }) => void;
+  };
   ClientTabs: { user: any };
   VendorTabs: { user: any };
   Profile: { user: any };
@@ -17,50 +25,58 @@ export type RootStackParamList = {
 
 const Stack = createStackNavigator<RootStackParamList>();
 
-const AppNavigator = () => {
+const AppNavigator: React.FC = () => {
   return (
     <Stack.Navigator 
       initialRouteName="Login"
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#6200ee',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false,
+        cardStyle: { backgroundColor: '#f7fff9' },
       }}
     >
+      {/* Pantalla de Login */}
       <Stack.Screen 
         name="Login" 
         component={LoginScreen}
         options={{ 
           headerShown: false,
-          title: 'Iniciar Sesión'
         }}
       />
+
+      {/* Pantalla de Crear Cuenta */}
       <Stack.Screen 
         name="CreateAccount" 
         component={CreateAccount}
         options={{ 
-          title: 'Crear Cuenta',
-          headerShown: true,
+          headerShown: false,
         }}
       />
-<Stack.Screen 
-  name="ClientTabs" 
-  component={ClientTabNavigator}
-  options={{ 
-    headerShown: false,
-    title: 'Explorar'
-  }}
-/>
+
+      {/* Selector de Ubicación en Mapa */}
+      <Stack.Screen 
+        name="MapLocationPicker" 
+        component={MapLocationPicker}
+        options={{ 
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+
+      {/* Tabs de Cliente */}
+      <Stack.Screen 
+        name="ClientTabs" 
+        component={ClientTabNavigator}
+        options={{ 
+          headerShown: false,
+        }}
+      />
+
+      {/* Tabs de Vendedor */}
       <Stack.Screen 
         name="VendorTabs" 
         component={VendorTabNavigator}
         options={{ 
           headerShown: false,
-          title: 'Vendedor'
         }}
       />
     </Stack.Navigator>

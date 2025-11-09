@@ -1,7 +1,6 @@
-// src/screens/HomeScreenClient.tsx
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,120 +10,113 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { dynamodb, GOOGLE_MAPS_API_KEY, TABLE_NAME } from '../aws-config';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { dynamodb, TABLE_NAME } from '../aws-config';
 
 const { width, height } = Dimensions.get('window');
 
-// Interfaces para los datos
 interface Vendor {
   id: string;
-  name: string;
-  category: string;
-  location: {
-    latitude: number;
-    longitude: number;
+  nombre: string;
+  categoria: string;
+  ubicacion: {
+    direccion: string;
+    lat: number;
+    lng: number;
   };
   rating: number;
-  description?: string;
+  descripcion?: string;
   horario?: {
     apertura: string;
     cierre: string;
     dias: string[];
   };
   telefono?: string;
-  direccion?: string;
   distance?: number;
 }
 
-interface Favorite {
-  vendorId: string;
-  userId: string;
-  fechaAgregado: string;
+interface Props {
+  navigation: any;
+  route: any;
+  user: any;
 }
 
-interface RouteStep {
-  latitude: number;
-  longitude: number;
-}
-
-export default function HomeScreenClient({ navigation, route }: any) {
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+const HomeScreenClient: React.FC<Props> = ({ navigation, route, user }) => {
+  const mapRef = useRef<any>(null);
+  
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
-  const [region, setRegion] = useState<Region | null>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const [region, setRegion] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [filteredVendors, setFilteredVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string>('user123');
-  const [navigationMode, setNavigationMode] = useState(false);
-  const [routeCoordinates, setRouteCoordinates] = useState<RouteStep[]>([]);
-  const [distanceToVendor, setDistanceToVendor] = useState<number | null>(null);
-  const [locationWatcher, setLocationWatcher] = useState<any>(null);
-  const [calculatingRoute, setCalculatingRoute] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
-  // Coordenadas de prueba - Centro de CDMX
-  const TEST_LOCATION = {
+  // Ubicación por defecto (Centro CDMX)
+  const DEFAULT_LOCATION = {
     latitude: 19.4326,
     longitude: -99.1332
   };
 
   useEffect(() => {
-    loadVendors();
-    requestLocationPermission();
-    
-    return () => {
-      if (locationWatcher) {
-        locationWatcher.remove();
-      }
-    };
+    initializeApp();
   }, []);
 
   useEffect(() => {
     filterVendors();
-  }, [searchQuery, vendors]);
+  }, [searchQuery, vendors, userLocation]);
+
+  const initializeApp = async () => {
+    await requestLocationPermission();
+    await loadVendors();
+  };
 
   const requestLocationPermission = async () => {
     try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
       if (status !== 'granted') {
-        setErrorMsg('Permiso de ubicación denegado');
-        setUserLocation(TEST_LOCATION);
+        setLocationError('Usando ubicación por defecto');
+        setUserLocation(DEFAULT_LOCATION);
         setRegion({
-          ...TEST_LOCATION,
+          ...DEFAULT_LOCATION,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         });
         return;
       }
 
-      let location = await Location.getCurrentPositionAsync({
+      const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
         timeout: 10000,
       });
-      
+
       const newLocation = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
       };
-      
-      console.log('Ubicación del usuario:', newLocation);
+
       setUserLocation(newLocation);
       setRegion({
         ...newLocation,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
       });
+      
+      console.log('Ubicación del usuario:', newLocation);
     } catch (error) {
-      console.error('Error getting location:', error);
-      setErrorMsg('Error al obtener la ubicación, usando ubicación de prueba');
-      setUserLocation(TEST_LOCATION);
+      console.error('Error obteniendo ubicación:', error);
+      setLocationError('Usando ubicación por defecto');
+      setUserLocation(DEFAULT_LOCATION);
       setRegion({
-        ...TEST_LOCATION,
+        ...DEFAULT_LOCATION,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
       });
@@ -145,322 +137,96 @@ export default function HomeScreenClient({ navigation, route }: any) {
 
       const result = await dynamodb.scan(params).promise();
       
-      let vendorsToUse = VENDORS_DATA_TEST;
-      
       if (result.Items && result.Items.length > 0) {
         console.log('Vendedores encontrados en DynamoDB:', result.Items.length);
         
-        const vendorsData: Vendor[] = result.Items.map((item: any, index: number) => {
-          const vendorId = typeof item.id === 'object' ? item.id.S : item.id || `vendor-${Date.now()}-${index}`;
+        const vendorsData: Vendor[] = result.Items.map((item: any) => {
+          // Manejar diferentes formatos de datos de DynamoDB
+          const lat = item.ubicacion?.lat 
+            ? parseFloat(item.ubicacion.lat) 
+            : (item.ubicacion?.M?.lat?.N ? parseFloat(item.ubicacion.M.lat.N) : DEFAULT_LOCATION.latitude);
           
-          // Generar ubicaciones más realistas alrededor del usuario
-          const userLat = userLocation?.latitude || TEST_LOCATION.latitude;
-          const userLng = userLocation?.longitude || TEST_LOCATION.longitude;
-          
-          // Distribuir vendedores en un radio de 10km
-          const radius = 10; // 10km en grados aproximados
-          const angle = (index / result.Items.length) * 2 * Math.PI;
-          const distance = 0.05 + (Math.random() * 0.05); // 5-10km en grados
-          
-          const lat = userLat + (Math.cos(angle) * distance);
-          const lng = userLng + (Math.sin(angle) * distance);
-          
+          const lng = item.ubicacion?.lng 
+            ? parseFloat(item.ubicacion.lng) 
+            : (item.ubicacion?.M?.lng?.N ? parseFloat(item.ubicacion.M.lng.N) : DEFAULT_LOCATION.longitude);
+
           return {
-            id: vendorId,
-            name: item.nombre?.S || `Vendedor ${index + 1}`,
-            category: item.categoria?.S || 'General',
-            location: { latitude: lat, longitude: lng },
-            rating: parseFloat(item.rating?.N || (4 + Math.random()).toFixed(1)),
-            description: item.descripcion?.S || 'Descripción del negocio',
-            telefono: item.telefono?.S || '5512345678',
-            direccion: item.ubicacion?.M?.direccion?.S || `Calle ${index + 1}, CDMX`,
-            horario: item.horario?.M ? {
-              apertura: item.horario.M.apertura?.S || '09:00',
-              cierre: item.horario.M.cierre?.S || '18:00',
-              dias: item.horario.M.dias?.L?.map((d: any) => d.S) || ['Lunes', 'Viernes']
-            } : {
+            id: item.id,
+            nombre: item.nombre,
+            categoria: item.categoria || 'General',
+            ubicacion: {
+              direccion: item.ubicacion?.direccion || item.ubicacion?.M?.direccion?.S || 'Dirección no disponible',
+              lat: lat,
+              lng: lng
+            },
+            rating: parseFloat(item.rating) || 4.0,
+            descripcion: item.descripcion || '',
+            telefono: item.telefono || '',
+            horario: item.horario || {
               apertura: '09:00',
               cierre: '18:00',
               dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
             }
           };
-        }).filter(vendor => vendor.location.latitude !== 0 && vendor.location.longitude !== 0);
-
-        const uniqueVendors = vendorsData.filter((vendor, index, self) => 
-          index === self.findIndex(v => v.id === vendor.id)
+        }).filter(vendor => 
+          vendor.ubicacion.lat !== DEFAULT_LOCATION.latitude &&
+          vendor.ubicacion.lng !== DEFAULT_LOCATION.longitude &&
+          vendor.ubicacion.lat !== 0 && 
+          vendor.ubicacion.lng !== 0
         );
 
-        vendorsToUse = uniqueVendors.length > 0 ? uniqueVendors : VENDORS_DATA_TEST;
+        console.log('Vendedores procesados:', vendorsData.length);
+        setVendors(vendorsData);
+        setFilteredVendors(vendorsData);
+      } else {
+        console.log('No se encontraron vendedores en DynamoDB');
+        setVendors([]);
+        setFilteredVendors([]);
       }
-
-      console.log('Vendedores cargados:', vendorsToUse.length);
-      setVendors(vendorsToUse);
-      setFilteredVendors(vendorsToUse);
-      
     } catch (error) {
-      console.error('Error loading vendors:', error);
-      setVendors(VENDORS_DATA_TEST);
-      setFilteredVendors(VENDORS_DATA_TEST);
+      console.error('Error cargando vendedores:', error);
+      Alert.alert('Error', 'No se pudieron cargar los negocios');
+      setVendors([]);
+      setFilteredVendors([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterVendors = () => {
+  const filterVendors = useCallback(() => {
     if (!searchQuery.trim()) {
-      setFilteredVendors(vendors);
+      const vendorsWithDistance = calculateDistances(vendors);
+      setFilteredVendors(vendorsWithDistance);
       return;
     }
 
     const query = searchQuery.toLowerCase();
     const filtered = vendors.filter(vendor =>
-      vendor.name.toLowerCase().includes(query) ||
-      vendor.category.toLowerCase().includes(query) ||
-      vendor.description?.toLowerCase().includes(query)
+      vendor.nombre.toLowerCase().includes(query) ||
+      vendor.categoria.toLowerCase().includes(query) ||
+      vendor.descripcion?.toLowerCase().includes(query)
     );
-    setFilteredVendors(filtered);
-  };
+    
+    const filteredWithDistance = calculateDistances(filtered);
+    setFilteredVendors(filteredWithDistance);
+  }, [searchQuery, vendors, userLocation]);
 
-  const handleVendorPress = (vendor: Vendor) => {
-    setSelectedVendor(vendor);
-    setRegion({
-      latitude: vendor.location.latitude,
-      longitude: vendor.location.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    });
-  };
+  const calculateDistances = (vendorsList: Vendor[]): Vendor[] => {
+    if (!userLocation) return vendorsList;
 
-  const handleAddToFavorites = async (vendor: Vendor) => {
-    try {
-      const favoriteId = `FAVORITE#${userId}#${vendor.id}`;
-      
-      const params = {
-        TableName: TABLE_NAME,
-        Item: {
-          id: { S: favoriteId },
-          userType: { S: 'favorite' },
-          userId: { S: userId },
-          vendorId: { S: vendor.id },
-          vendorName: { S: vendor.name },
-          vendorCategory: { S: vendor.category },
-          vendorData: { S: JSON.stringify(vendor) },
-          fechaAgregado: { S: new Date().toISOString() }
-        }
-      };
-
-      console.log('Agregando a favoritos:', params.Item);
-      await dynamodb.put(params).promise();
-      
-      Alert.alert(
-        '✅ Agregado a favoritos', 
-        `${vendor.name} se ha agregado a tus favoritos`,
-        [
-          { 
-            text: 'Ver favoritos', 
-            onPress: () => navigation.navigate('Favorites')
-          },
-          { 
-            text: 'Continuar explorando', 
-            style: 'cancel' 
-          }
-        ]
-      );
-      setSelectedVendor(null);
-      
-    } catch (error: any) {
-      console.error('Error adding to favorites:', error);
-      Alert.alert(
-        '❌ Error', 
-        `No se pudo agregar a favoritos: ${error.message || 'Error desconocido'}`
-      );
-    }
-  };
-
-  const handleViewNearby = () => {
-    if (!userLocation) {
-      Alert.alert('Error', 'No se pudo obtener tu ubicación');
-      return;
-    }
-
-    // Radio ampliado a 10km
-    const nearbyVendors = vendors.map(vendor => {
-      const distance = calculateDistance(
+    return vendorsList.map(vendor => ({
+      ...vendor,
+      distance: calculateDistance(
         userLocation.latitude,
         userLocation.longitude,
-        vendor.location.latitude,
-        vendor.location.longitude
-      );
-      return { ...vendor, distance };
-    }).filter(vendor => vendor.distance <= 10) // 10km de radio
-      .sort((a, b) => (a.distance || 0) - (b.distance || 0));
-
-    console.log(`Vendedores cercanos encontrados: ${nearbyVendors.length} en 10km`);
-
-    navigation.navigate('Near', { 
-      nearbyVendors,
-      userLocation 
-    });
-  };
-
-  // Función para obtener ruta real usando Google Directions API
-  const getRealRoute = async (destination: { latitude: number; longitude: number }) => {
-    if (!userLocation) return [];
-
-    try {
-      setCalculatingRoute(true);
-      
-      const origin = `${userLocation.latitude},${userLocation.longitude}`;
-      const dest = `${destination.latitude},${destination.longitude}`;
-      
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${dest}&mode=walking&key=${GOOGLE_MAPS_API_KEY}`;
-      
-      console.log('Solicitando ruta a Google Directions API...');
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      if (data.status === 'OK' && data.routes.length > 0) {
-        const route = data.routes[0];
-        const points = decodePolyline(route.overview_polyline.points);
-        console.log(`Ruta obtenida con ${points.length} puntos`);
-        return points;
-      } else {
-        console.warn('No se pudo obtener ruta:', data.status);
-        // Fallback a ruta directa
-        return [userLocation, destination];
-      }
-    } catch (error) {
-      console.error('Error obteniendo ruta:', error);
-      // Fallback a ruta directa
-      return [userLocation, destination];
-    } finally {
-      setCalculatingRoute(false);
-    }
-  };
-
-  // Decodificar polyline de Google Maps
-  const decodePolyline = (encoded: string): RouteStep[] => {
-    let points = [];
-    let index = 0, len = encoded.length;
-    let lat = 0, lng = 0;
-
-    while (index < len) {
-      let b, shift = 0, result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-
-      points.push({
-        latitude: lat / 1e5,
-        longitude: lng / 1e5
-      });
-    }
-    return points;
-  };
-
-  const startNavigation = async (vendor: Vendor) => {
-    if (!userLocation) {
-      Alert.alert('Error', 'No se puede iniciar navegación sin ubicación');
-      return;
-    }
-
-    Alert.alert(
-      'Iniciando Navegación',
-      `¿Quieres trazar una ruta hacia ${vendor.name}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Trazar Ruta', 
-          onPress: async () => {
-            setNavigationMode(true);
-            setSelectedVendor(vendor);
-            
-            // Obtener ruta real
-            const realRoute = await getRealRoute(vendor.location);
-            setRouteCoordinates(realRoute);
-            
-            // Calcular distancia inicial
-            const initialDistance = calculateDistance(
-              userLocation.latitude,
-              userLocation.longitude,
-              vendor.location.latitude,
-              vendor.location.longitude
-            );
-            setDistanceToVendor(initialDistance);
-
-            // Iniciar seguimiento de ubicación en tiempo real
-            const watcher = await Location.watchPositionAsync(
-              {
-                accuracy: Location.Accuracy.High,
-                timeInterval: 3000,
-                distanceInterval: 10,
-              },
-              (newLocation) => {
-                const updatedUserLocation = {
-                  latitude: newLocation.coords.latitude,
-                  longitude: newLocation.coords.longitude
-                };
-                
-                setUserLocation(updatedUserLocation);
-                
-                // Actualizar distancia
-                const newDistance = calculateDistance(
-                  updatedUserLocation.latitude,
-                  updatedUserLocation.longitude,
-                  vendor.location.latitude,
-                  vendor.location.longitude
-                );
-                setDistanceToVendor(newDistance);
-
-                // Actualizar región para seguir al usuario
-                setRegion({
-                  ...updatedUserLocation,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                });
-
-                // Si está muy cerca, detener navegación
-                if (newDistance < 0.05) { // 50 metros
-                  Alert.alert('🎉 ¡Llegaste!', `Has llegado a ${vendor.name}`);
-                  stopNavigation();
-                }
-              }
-            );
-
-            setLocationWatcher(watcher);
-          }
-        }
-      ]
-    );
-  };
-
-  const stopNavigation = () => {
-    setNavigationMode(false);
-    setRouteCoordinates([]);
-    setDistanceToVendor(null);
-    if (locationWatcher) {
-      locationWatcher.remove();
-      setLocationWatcher(null);
-    }
+        vendor.ubicacion.lat,
+        vendor.ubicacion.lng
+      )
+    }));
   };
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371;
+    const R = 6371; // Radio de la Tierra en km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = 
@@ -471,19 +237,98 @@ export default function HomeScreenClient({ navigation, route }: any) {
     return R * c;
   };
 
+  const handleVendorPress = useCallback((vendor: Vendor) => {
+    setSelectedVendor(vendor);
+    
+    // Animar el mapa hacia el vendedor
+    if (mapRef.current && mapReady) {
+      mapRef.current.animateToRegion({
+        latitude: vendor.ubicacion.lat,
+        longitude: vendor.ubicacion.lng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 500);
+    }
+  }, [mapReady]);
+
+  const handleAddToFavorites = async (vendor: Vendor) => {
+    try {
+      const favoriteId = `FAVORITE#${user.id}#${vendor.id}`;
+      
+      const params = {
+        TableName: TABLE_NAME,
+        Item: {
+          id: favoriteId,
+          userType: 'favorite',
+          userId: user.id,
+          vendorId: vendor.id,
+          vendorData: JSON.stringify(vendor),
+          fechaAgregado: new Date().toISOString()
+        }
+      };
+
+      await dynamodb.put(params).promise();
+      
+      Alert.alert(
+        'Agregado a favoritos', 
+        `${vendor.nombre} se ha agregado a tus favoritos`,
+        [
+          { 
+            text: 'Ver favoritos', 
+            onPress: () => navigation.navigate('Favorites')
+          },
+          { 
+            text: 'Continuar', 
+            style: 'cancel' 
+          }
+        ]
+      );
+      
+      setSelectedVendor(null);
+    } catch (error) {
+      console.error('Error agregando a favoritos:', error);
+      Alert.alert('Error', 'No se pudo agregar a favoritos');
+    }
+  };
+
+  const handleViewNearby = () => {
+    if (!userLocation) {
+      Alert.alert('Error', 'No se pudo obtener tu ubicación');
+      return;
+    }
+
+    const nearbyVendors = filteredVendors
+      .filter(vendor => (vendor.distance || 0) <= 10)
+      .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+
+    if (nearbyVendors.length === 0) {
+      Alert.alert(
+        'Sin resultados', 
+        'No se encontraron negocios cercanos en un radio de 10km'
+      );
+      return;
+    }
+
+    navigation.navigate('Near', { 
+      nearbyVendors,
+      userLocation 
+    });
+  };
+
   const handleMapReady = () => {
     setMapReady(true);
+    console.log('Mapa listo');
   };
 
   const generateUniqueKey = (vendor: Vendor, index: number) => {
-    return `${vendor.id}-${vendor.location.latitude}-${vendor.location.longitude}-${index}`;
+    return `${vendor.id}-${index}`;
   };
 
   if (!region) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Cargando mapa...</Text>
+        <ActivityIndicator size="large" color="#4ecdc4" />
+        <Text style={styles.loadingText}>Inicializando mapa...</Text>
       </View>
     );
   }
@@ -492,69 +337,70 @@ export default function HomeScreenClient({ navigation, route }: any) {
     <View style={styles.container}>
       {/* Mapa */}
       <MapView
+        ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
+        provider={PROVIDER_DEFAULT}
         region={region}
         onMapReady={handleMapReady}
         showsUserLocation={true}
         showsMyLocationButton={true}
         showsCompass={true}
-        showsScale={true}
+        showsScale={false}
+        loadingEnabled={true}
+        loadingIndicatorColor="#4ecdc4"
       >
         {/* Marcadores de vendedores */}
-        {filteredVendors.map((vendor, index) => (
+        {mapReady && filteredVendors.map((vendor, index) => (
           <Marker
             key={generateUniqueKey(vendor, index)}
-            coordinate={vendor.location}
-            title={vendor.name}
-            description={vendor.category}
+            coordinate={{
+              latitude: vendor.ubicacion.lat,
+              longitude: vendor.ubicacion.lng
+            }}
+            title={vendor.nombre}
+            description={vendor.categoria}
             onPress={() => handleVendorPress(vendor)}
+            pinColor="#ff6b6b"
           />
         ))}
-
-        {/* Línea de ruta para navegación */}
-        {navigationMode && routeCoordinates.length > 1 && (
-          <Polyline
-            coordinates={routeCoordinates}
-            strokeColor="#007AFF"
-            strokeWidth={6}
-            lineDashPattern={[1, 0]} // Línea continua
-          />
-        )}
       </MapView>
 
       {/* Header de búsqueda */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#666" />
+          <Ionicons name="search" size={20} color="#95a5a6" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar artesanías, comida, lugares..."
+            placeholder="Buscar negocios, categorías..."
+            placeholderTextColor="#95a5a6"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#666" />
+              <Ionicons name="close-circle" size={20} color="#95a5a6" />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Botón de cercanos */}
         <TouchableOpacity 
           style={styles.nearbyButton} 
           onPress={handleViewNearby}
+          disabled={!userLocation}
         >
-          <Ionicons name="location" size={16} color="#fff" />
-          <Text style={styles.nearbyButtonText}>Ver tiendas cercanas (10km)</Text>
+          <Ionicons name="location" size={16} color="#f7fff9" />
+          <Text style={styles.nearbyButtonText}>Ver cercanos (10km)</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Lista de resultados de búsqueda */}
+      {/* Resultados de búsqueda */}
       {searchQuery.length > 0 && (
         <View style={styles.resultsContainer}>
-          <ScrollView style={styles.resultsList}>
+          <ScrollView 
+            style={styles.resultsList} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             {filteredVendors.map((vendor, index) => (
               <TouchableOpacity 
                 key={generateUniqueKey(vendor, index)} 
@@ -562,238 +408,129 @@ export default function HomeScreenClient({ navigation, route }: any) {
                 onPress={() => handleVendorPress(vendor)}
               >
                 <View style={styles.resultInfo}>
-                  <Text style={styles.resultName}>{vendor.name}</Text>
-                  <Text style={styles.resultCategory}>{vendor.category}</Text>
-                  <Text style={styles.resultRating}>⭐ {vendor.rating}</Text>
+                  <Text style={styles.resultName}>{vendor.nombre}</Text>
+                  <Text style={styles.resultCategory}>{vendor.categoria}</Text>
+                  <View style={styles.resultMeta}>
+                    <Ionicons name="star" size={14} color="#ff6b6b" />
+                    <Text style={styles.resultRating}>{vendor.rating.toFixed(1)}</Text>
+                    {vendor.distance && (
+                      <Text style={styles.resultDistance}>
+                        • {vendor.distance.toFixed(1)} km
+                      </Text>
+                    )}
+                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#666" />
+                <Ionicons name="chevron-forward" size={20} color="#95a5a6" />
               </TouchableOpacity>
             ))}
             {filteredVendors.length === 0 && (
-              <Text style={styles.noResults}>No se encontraron resultados</Text>
+              <View style={styles.noResultsContainer}>
+                <Ionicons name="search-outline" size={48} color="#c1f9e1" />
+                <Text style={styles.noResults}>No se encontraron resultados</Text>
+                <Text style={styles.noResultsHint}>Intenta con otra búsqueda</Text>
+              </View>
             )}
           </ScrollView>
         </View>
       )}
 
-      {/* Modal de información del vendedor */}
+      {/* Información del vendedor seleccionado */}
       {selectedVendor && (
         <View style={styles.vendorInfo}>
           <View style={styles.vendorHeader}>
-            <View style={styles.vendorTitle}>
-              <Text style={styles.vendorName}>{selectedVendor.name}</Text>
-              <Text style={styles.vendorCategory}>{selectedVendor.category}</Text>
-              <Text style={styles.vendorRating}>⭐ {selectedVendor.rating}</Text>
-              {navigationMode && distanceToVendor && (
-                <Text style={styles.distanceText}>
-                  📍 {distanceToVendor.toFixed(2)} km
-                </Text>
-              )}
+            <View style={styles.vendorTitleSection}>
+              <Text style={styles.vendorName}>{selectedVendor.nombre}</Text>
+              <Text style={styles.vendorCategory}>{selectedVendor.categoria}</Text>
+              <View style={styles.vendorMeta}>
+                <Ionicons name="star" size={16} color="#ff6b6b" />
+                <Text style={styles.vendorRating}>{selectedVendor.rating.toFixed(1)}</Text>
+                {selectedVendor.distance && (
+                  <>
+                    <Ionicons name="location" size={16} color="#4ecdc4" style={{ marginLeft: 12 }} />
+                    <Text style={styles.vendorDistance}>
+                      {selectedVendor.distance.toFixed(1)} km
+                    </Text>
+                  </>
+                )}
+              </View>
             </View>
             <TouchableOpacity 
               style={styles.closeButton}
-              onPress={() => {
-                setSelectedVendor(null);
-                if (navigationMode) stopNavigation();
-              }}
+              onPress={() => setSelectedVendor(null)}
             >
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close-circle" size={28} color="#95a5a6" />
             </TouchableOpacity>
           </View>
 
-          {selectedVendor.description && (
-            <Text style={styles.vendorDescription}>{selectedVendor.description}</Text>
+          {selectedVendor.descripcion && (
+            <Text style={styles.vendorDescription}>{selectedVendor.descripcion}</Text>
           )}
 
-          {selectedVendor.direccion && (
-            <View style={styles.vendorDetail}>
-              <Ionicons name="location" size={16} color="#666" />
-              <Text style={styles.vendorDetailText}>{selectedVendor.direccion}</Text>
-            </View>
-          )}
+          <View style={styles.vendorDetails}>
+            {selectedVendor.ubicacion.direccion && (
+              <View style={styles.vendorDetail}>
+                <Ionicons name="location-outline" size={18} color="#4ecdc4" />
+                <Text style={styles.vendorDetailText} numberOfLines={2}>
+                  {selectedVendor.ubicacion.direccion}
+                </Text>
+              </View>
+            )}
 
-          {selectedVendor.telefono && (
-            <View style={styles.vendorDetail}>
-              <Ionicons name="call" size={16} color="#666" />
-              <Text style={styles.vendorDetailText}>{selectedVendor.telefono}</Text>
-            </View>
-          )}
+            {selectedVendor.telefono && (
+              <View style={styles.vendorDetail}>
+                <Ionicons name="call-outline" size={18} color="#4ecdc4" />
+                <Text style={styles.vendorDetailText}>{selectedVendor.telefono}</Text>
+              </View>
+            )}
 
-          <View style={styles.vendorActions}>
-            {!navigationMode ? (
-              <>
-                <TouchableOpacity 
-                  style={styles.navigationButton}
-                  onPress={() => startNavigation(selectedVendor)}
-                  disabled={calculatingRoute}
-                >
-                  {calculatingRoute ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="navigate" size={20} color="#fff" />
-                  )}
-                  <Text style={styles.navigationButtonText}>
-                    {calculatingRoute ? 'Calculando ruta...' : 'Trazar Camino'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.favoriteButton}
-                  onPress={() => handleAddToFavorites(selectedVendor)}
-                >
-                  <Ionicons name="heart" size={20} color="#fff" />
-                  <Text style={styles.favoriteButtonText}>Agregar a Favoritos</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity 
-                style={styles.stopNavigationButton}
-                onPress={stopNavigation}
-              >
-                <Ionicons name="stop-circle" size={20} color="#fff" />
-                <Text style={styles.stopNavigationButtonText}>Detener Navegación</Text>
-              </TouchableOpacity>
+            {selectedVendor.horario && (
+              <View style={styles.vendorDetail}>
+                <Ionicons name="time-outline" size={18} color="#4ecdc4" />
+                <Text style={styles.vendorDetailText}>
+                  {selectedVendor.horario.apertura} - {selectedVendor.horario.cierre}
+                </Text>
+              </View>
             )}
           </View>
-        </View>
-      )}
 
-      {/* Mostrar mensaje de error si hay */}
-      {errorMsg && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{errorMsg}</Text>
-          <TouchableOpacity onPress={requestLocationPermission}>
-            <Text style={styles.retryText}>Reintentar</Text>
+          <TouchableOpacity 
+            style={styles.favoriteButton}
+            onPress={() => handleAddToFavorites(selectedVendor)}
+          >
+            <Ionicons name="heart-outline" size={20} color="#f7fff9" />
+            <Text style={styles.favoriteButtonText}>Agregar a Favoritos</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Loading */}
+      {/* Banner de error de ubicación */}
+      {locationError && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="information-circle-outline" size={20} color="#f7fff9" />
+          <Text style={styles.errorText}>{locationError}</Text>
+          <TouchableOpacity onPress={requestLocationPermission}>
+            <Ionicons name="refresh" size={20} color="#f7fff9" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Loading overlay */}
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Cargando vendedores...</Text>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#4ecdc4" />
+            <Text style={styles.loadingText}>Cargando negocios...</Text>
+          </View>
         </View>
       )}
     </View>
   );
-}
-
-// Datos de prueba mejor distribuidos
-const VENDORS_DATA_TEST: Vendor[] = [
-  {
-    id: 'test-1',
-    name: 'Restaurante El Centro',
-    category: 'Restaurante',
-    location: {
-      latitude: 19.4326,
-      longitude: -99.1332
-    },
-    rating: 4.5,
-    description: 'Auténtica comida mexicana en el corazón de la ciudad',
-    direccion: 'Zócalo de la CDMX',
-    telefono: '5512345678',
-    horario: {
-      apertura: '08:00',
-      cierre: '22:00',
-      dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-    }
-  },
-  {
-    id: 'test-2',
-    name: 'Café Bellas Artes',
-    category: 'Café',
-    location: {
-      latitude: 19.4342,
-      longitude: -99.1405
-    },
-    rating: 4.3,
-    description: 'Café de especialidad con vista al Palacio de Bellas Artes',
-    direccion: 'Av. Juárez, Centro Histórico',
-    telefono: '5587654321',
-    horario: {
-      apertura: '07:00',
-      cierre: '21:00',
-      dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-    }
-  },
-  {
-    id: 'test-3',
-    name: 'Artesanías Mexicanas',
-    category: 'Artesanías',
-    location: {
-      latitude: 19.4290,
-      longitude: -99.1380
-    },
-    rating: 4.7,
-    description: 'Artesanías tradicionales de todo México',
-    direccion: 'Mercado de La Ciudadela',
-    telefono: '5598765432',
-    horario: {
-      apertura: '09:00',
-      cierre: '19:00',
-      dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-    }
-  },
-  {
-    id: 'test-4',
-    name: 'Joyería La Esmeralda',
-    category: 'Joyería',
-    location: {
-      latitude: 19.4360,
-      longitude: -99.1350
-    },
-    rating: 4.2,
-    description: 'Joyas artesanales con plata y piedras mexicanas',
-    direccion: 'Calle Madero, Centro',
-    telefono: '5534567890',
-    horario: {
-      apertura: '10:00',
-      cierre: '20:00',
-      dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-    }
-  },
-  {
-    id: 'test-5',
-    name: 'Panadería Tradicional',
-    category: 'Panadería',
-    location: {
-      latitude: 19.4300,
-      longitude: -99.1310
-    },
-    rating: 4.6,
-    description: 'Pan tradicional mexicano recién horneado',
-    direccion: 'Calle República de Uruguay',
-    telefono: '5543210987',
-    horario: {
-      apertura: '06:00',
-      cierre: '18:00',
-      dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-    }
-  },
-  {
-    id: 'test-6',
-    name: 'Taquería Don José',
-    category: 'Comida Rápida',
-    location: {
-      latitude: 19.4280,
-      longitude: -99.1420
-    },
-    rating: 4.4,
-    description: 'Los mejores tacos al pastor de la ciudad',
-    direccion: 'Eje Central Lázaro Cárdenas',
-    telefono: '5578901234',
-    horario: {
-      apertura: '12:00',
-      cierre: '24:00',
-      dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-    }
-  }
-];
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f7fff9',
   },
   map: {
     width: '100%',
@@ -803,98 +540,86 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    zIndex: 1002,
+    backgroundColor: '#f7fff9',
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    color: '#1a535c',
+    fontWeight: '600',
   },
   searchContainer: {
     position: 'absolute',
     top: 50,
-    left: 20,
-    right: 20,
+    left: 16,
+    right: 16,
     zIndex: 1000,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 10,
-    marginRight: 10,
+    marginLeft: 12,
     fontSize: 16,
-    color: '#333',
+    color: '#1a535c',
   },
   nearbyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    marginTop: 10,
+    backgroundColor: '#4ecdc4',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 12,
     alignSelf: 'flex-start',
-    shadowColor: '#000',
+    shadowColor: '#4ecdc4',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   nearbyButtonText: {
-    color: 'white',
+    color: '#f7fff9',
     fontWeight: '600',
-    marginLeft: 5,
+    marginLeft: 6,
     fontSize: 14,
   },
   resultsContainer: {
     position: 'absolute',
-    top: 130,
-    left: 20,
-    right: 20,
-    backgroundColor: 'white',
-    borderRadius: 15,
-    maxHeight: 300,
+    top: 145,
+    left: 16,
+    right: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    maxHeight: 350,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 1001,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 999,
   },
   resultsList: {
-    padding: 10,
+    padding: 8,
   },
   resultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#c1f9e1',
   },
   resultInfo: {
     flex: 1,
@@ -902,127 +627,134 @@ const styles = StyleSheet.create({
   resultName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
+    color: '#1a535c',
+    marginBottom: 4,
   },
   resultCategory: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#95a5a6',
+    marginBottom: 6,
+  },
+  resultMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   resultRating: {
-    fontSize: 12,
-    color: '#ff9500',
+    fontSize: 14,
+    color: '#ff6b6b',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  resultDistance: {
+    fontSize: 14,
+    color: '#4ecdc4',
+    marginLeft: 4,
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    padding: 40,
   },
   noResults: {
     textAlign: 'center',
-    color: '#666',
+    color: '#1a535c',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  noResultsHint: {
+    textAlign: 'center',
+    color: '#95a5a6',
     fontSize: 14,
-    padding: 20,
+    marginTop: 8,
   },
   vendorInfo: {
     position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: 'white',
-    borderRadius: 15,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 1001,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 999,
+    maxHeight: height * 0.5,
   },
   vendorHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 15,
+    marginBottom: 12,
   },
-  vendorTitle: {
+  vendorTitleSection: {
     flex: 1,
   },
   vendorName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
+    color: '#1a535c',
     marginBottom: 4,
-    color: '#333',
   },
   vendorCategory: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 4,
+    fontSize: 15,
+    color: '#95a5a6',
+    marginBottom: 8,
+  },
+  vendorMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   vendorRating: {
-    fontSize: 14,
-    color: '#ff9500',
+    fontSize: 15,
+    color: '#ff6b6b',
+    fontWeight: '600',
+    marginLeft: 4,
   },
-  distanceText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: 'bold',
+  vendorDistance: {
+    fontSize: 15,
+    color: '#4ecdc4',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   vendorDescription: {
     fontSize: 14,
-    color: '#333',
-    marginBottom: 12,
+    color: '#1a535c',
     lineHeight: 20,
+    marginBottom: 16,
+  },
+  vendorDetails: {
+    marginBottom: 16,
   },
   vendorDetail: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   vendorDetailText: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-  },
-  vendorActions: {
-    marginTop: 15,
-  },
-  navigationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#007AFF',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-  },
-  navigationButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginLeft: 8,
-    fontSize: 16,
+    color: '#1a535c',
+    marginLeft: 10,
+    flex: 1,
   },
   favoriteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FF3B30',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   favoriteButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginLeft: 8,
-    fontSize: 16,
-  },
-  stopNavigationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FF9500',
-    borderRadius: 10,
-    padding: 15,
-  },
-  stopNavigationButtonText: {
-    color: 'white',
+    color: '#f7fff9',
     fontWeight: 'bold',
     marginLeft: 8,
     fontSize: 16,
@@ -1030,26 +762,48 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
-  errorContainer: {
+  errorBanner: {
     position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
+    top: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#ff6b6b',
-    padding: 15,
-    borderRadius: 10,
-    zIndex: 1001,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    zIndex: 1001,
   },
   errorText: {
-    color: 'white',
-    textAlign: 'center',
-    fontSize: 14,
-    marginBottom: 10,
+    flex: 1,
+    color: '#f7fff9',
+    fontSize: 13,
+    marginLeft: 10,
+    fontWeight: '500',
   },
-  retryText: {
-    color: 'white',
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1002,
+  },
+  loadingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });
+
+export default HomeScreenClient;
