@@ -60,78 +60,171 @@ const HomeScreenClient = ({ route, navigation }: any) => {
   // Obtener ubicación inicial
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      let loc = await Location.getCurrentPositionAsync({});
-      setLocation({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
+      try {
+        console.log('📍 Solicitando permisos de ubicación...');
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('❌ Permisos denegados');
+          alert('⚠️ Se necesitan permisos de ubicación');
+          return;
+        }
+        console.log('✅ Permisos concedidos');
+        let loc = await Location.getCurrentPositionAsync({});
+        console.log('📍 Ubicación obtenida:', loc.coords);
+        setLocation({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+      } catch (error) {
+        console.error('❌ Error obteniendo ubicación:', error);
+      }
     })();
   }, []);
 
   // Si viene una tienda desde NearStores o Favoritos
   useEffect(() => {
     if (route?.params?.store) {
-      const { name, address, latitude, longitude } = route.params.store;
-      setDestination({ latitude, longitude });
-      setStoreName(name);
-      setStoreAddress(address);
-      setSelectedVendor(route.params.store);
+      try {
+        console.log('🏪 Procesando tienda desde params:', route.params.store);
+        const { name, address, latitude, longitude } = route.params.store;
+        if (latitude && longitude) {
+          setDestination({ latitude, longitude });
+          setStoreName(name);
+          setStoreAddress(address);
+          setSelectedVendor(route.params.store);
+          console.log('✅ Tienda procesada correctamente');
+        }
+      } catch (error) {
+        console.error('❌ Error al procesar la tienda:', error);
+      }
     }
   }, [route?.params?.store]);
 
+  // Cleanup al desmontar componente
+  useEffect(() => {
+    return () => {
+      console.log('🧹 Limpiando componente...');
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+      }
+    };
+  }, []);
+
   // Seguimiento en tiempo real
   const startTracking = async () => {
-    if (!destination) return;
+    console.log('🚀 Intentando iniciar tracking...');
+    if (!destination) {
+      console.log('❌ No hay destino');
+      return;
+    }
+
+    // Limpia cualquier suscripción existente
+    if (locationSubscription.current) {
+      console.log('🧹 Limpiando suscripción anterior...');
+      locationSubscription.current.remove();
+      locationSubscription.current = null;
+    }
 
     setIsTracking(true);
-    locationSubscription.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, distanceInterval: 2 },
-      (loc) => {
-        const newLocation = {
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-        };
-        setLocation(newLocation);
+    
+    try {
+      console.log('📡 Iniciando watchPositionAsync...');
+      locationSubscription.current = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 2 },
+        (loc) => {
+          const newLocation = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          };
+          setLocation(newLocation);
 
-        const dist = haversine(newLocation, destination);
-        setDistance(dist);
+          const dist = haversine(newLocation, destination);
+          setDistance(dist);
 
-        if (dist < 10) {
-          setIsTracking(false);
-          if (locationSubscription.current) locationSubscription.current.remove();
-          alert('✅ Has llegado a tu destino');
+          if (dist < 10) {
+            console.log('✅ Llegaste al destino');
+            setIsTracking(false);
+            if (locationSubscription.current) {
+              locationSubscription.current.remove();
+              locationSubscription.current = null;
+            }
+            alert('✅ Has llegado a tu destino');
+          }
         }
-      }
-    );
+      );
+      console.log('✅ Tracking iniciado correctamente');
+    } catch (error) {
+      console.error('❌ Error al iniciar tracking:', error);
+      setIsTracking(false);
+      alert('⚠️ Error al iniciar el seguimiento');
+    }
   };
 
   const stopTracking = () => {
+    console.log('⏸️ Deteniendo tracking...');
     setIsTracking(false);
-    if (locationSubscription.current) locationSubscription.current.remove();
+    if (locationSubscription.current) {
+      locationSubscription.current.remove();
+      locationSubscription.current = null;
+    }
   };
 
   const clearRoute = () => {
+    console.log('🗑️ Limpiando ruta...');
     stopTracking();
     setDestination(null);
     setDistance(null);
     setSelectedVendor(null);
+    setStoreName('');
+    setStoreAddress('');
   };
 
   const handleVendorPress = (vendor: any) => {
-    setSelectedVendor(vendor);
-    setDestination({ latitude: vendor.latitude, longitude: vendor.longitude });
-    setStoreName(vendor.name);
-    setStoreAddress(vendor.address);
+    console.log('👆 Vendor presionado:', vendor);
+    
+    try {
+      if (!vendor) {
+        console.error('❌ Vendor es null o undefined');
+        alert('⚠️ Error: Negocio no disponible');
+        return;
+      }
+
+      if (!vendor.latitude || !vendor.longitude) {
+        console.error('❌ Vendor sin coordenadas:', vendor);
+        alert('⚠️ Error: Negocio sin ubicación');
+        return;
+      }
+      
+      // Detener tracking anterior si existe
+      if (isTracking) {
+        console.log('⏸️ Deteniendo tracking previo...');
+        stopTracking();
+      }
+      
+      console.log('✅ Configurando vendor:', vendor.name);
+      setSelectedVendor(vendor);
+      setDestination({ latitude: vendor.latitude, longitude: vendor.longitude });
+      setStoreName(vendor.name);
+      setStoreAddress(vendor.address);
+      console.log('✅ Vendor configurado correctamente');
+    } catch (error) {
+      console.error('❌ ERROR EN handleVendorPress:', error);
+      alert('⚠️ Error al seleccionar negocio');
+    }
   };
 
   const addToFavorites = (vendor: any) => {
+    console.log('❤️ Agregando a favoritos:', vendor.name);
     if (!favorites.some(f => f.id === vendor.id)) {
       setFavorites(prev => [...prev, vendor]);
-      navigation.navigate('Favorites', { store: vendor });
+      alert('❤️ Agregado a favoritos');
+    } else {
+      alert('⚠️ Ya está en favoritos');
     }
   };
+
+  console.log('🔄 Renderizando componente. Location:', location ? 'OK' : 'NULL');
 
   return (
     <View style={styles.container}>
@@ -153,6 +246,7 @@ const HomeScreenClient = ({ route, navigation }: any) => {
             <TouchableOpacity
               style={styles.searchItem}
               onPress={() => {
+                console.log('🔍 Búsqueda: seleccionado', item.name);
                 setSearch('');
                 handleVendorPress(item);
               }}
@@ -184,7 +278,10 @@ const HomeScreenClient = ({ route, navigation }: any) => {
                   latitude: vendor.latitude,
                   longitude: vendor.longitude,
                 }}
-                onPress={() => handleVendorPress(vendor)}
+                onPress={() => {
+                  console.log('📍 Marker presionado:', vendor.name);
+                  handleVendorPress(vendor);
+                }}
               >
                 <Ionicons name="storefront" size={28} color="#ff6b6b" />
               </Marker>
@@ -197,6 +294,8 @@ const HomeScreenClient = ({ route, navigation }: any) => {
                 apikey={GOOGLE_MAPS_APIKEY}
                 strokeWidth={4}
                 strokeColor="#4ecdc4"
+                onError={(error) => console.error('❌ Error en MapViewDirections:', error)}
+                onReady={(result) => console.log('✅ Ruta lista:', result.distance, 'km')}
               />
             )}
           </MapView>

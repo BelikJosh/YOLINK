@@ -6,24 +6,17 @@ const NearStoresScreen = ({ navigation }: any) => {
   const stores = [
     {
       id: '1',
-      name: 'Café Central',
-      address: 'Av. Reforma 123, CDMX',
+      name: 'Cafetería La Esquina',
+      address: 'Av. Central 102, CDMX',
       latitude: 19.4326,
       longitude: -99.1332,
     },
     {
       id: '2',
-      name: 'Panadería del Sol',
-      address: 'Calle 45 #10, CDMX',
-      latitude: 19.4356,
+      name: 'Tienda Orgánica VerdeVida',
+      address: 'Calle Reforma 89, CDMX',
+      latitude: 19.4365,
       longitude: -99.1402,
-    },
-    {
-      id: '3',
-      name: 'Mercado Verde',
-      address: 'Insurgentes Sur 789, CDMX',
-      latitude: 19.4278,
-      longitude: -99.1502,
     },
   ];
 
@@ -45,7 +38,6 @@ const NearStoresScreen = ({ navigation }: any) => {
           <View style={styles.card}>
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.address}>{item.address}</Text>
-
             <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.routeButton}
@@ -54,7 +46,6 @@ const NearStoresScreen = ({ navigation }: any) => {
                 <Ionicons name="navigate" size={18} color="#fff" />
                 <Text style={styles.btnText}>Trazar Ruta</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.favoriteButton}
                 onPress={() => handleFavorite(item)}

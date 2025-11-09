@@ -57,82 +57,85 @@ const ProfileScreen = () => {
 
   // Cargar datos REALES del usuario desde DynamoDB
   useEffect(() => {
-    const loadUserProfile = async () => {
-      try {
-        setLoading(true);
-        
-        const userString = await AsyncStorage.getItem('currentUser');
-        console.log('📦 Usuario desde AsyncStorage:', userString);
-        
-        if (!userString) {
-          Alert.alert('Error', 'No se encontró usuario logueado');
-          setLoading(false);
-          return;
-        }
-
-        const userData = JSON.parse(userString);
-        console.log('🔍 Datos del usuario:', userData);
-
-        const params = {
-          TableName: TABLE_NAME,
-          Key: {
-            id: userData.id
-          }
-        };
-
-        console.log('📊 Buscando en DynamoDB con ID:', userData.id);
-        
-        const result = await dynamodb.get(params).promise();
-        console.log('✅ Resultado de DynamoDB:', result);
-
-        if (!result.Item) {
-          Alert.alert('Error', 'No se encontraron datos del usuario en la base de datos');
-          setLoading(false);
-          return;
-        }
-
-        const dbUser = result.Item;
-        
-        const userProfile: UserProfile = {
-          id: dbUser.id,
-          nombre: dbUser.nombre || 'Usuario',
-          email: dbUser.email,
-          phone: dbUser.telefono || '+525512345678',
-          userType: dbUser.userType || 'client',
-          walletOpenPay: dbUser.walletOpenPay || `$ilp.interledger-test.dev/${dbUser.id}`,
-          fechaRegistro: dbUser.fechaRegistro || new Date().toISOString(),
-          ubicacion: dbUser.ubicacion,
-          telefono: dbUser.telefono,
-          descripcion: dbUser.descripcion,
-          rating: dbUser.rating,
-          ventasRealizadas: dbUser.ventasRealizadas,
-          totalGanado: dbUser.totalGanado,
-          comprasRealizadas: dbUser.comprasRealizadas,
-          totalGastado: dbUser.totalGastado,
-          wallets: [
-            {
-              id: '1',
-              pointer: dbUser.walletOpenPay || `$ilp.interledger-test.dev/${dbUser.id}`,
-              currency: 'USD',
-              balance: dbUser.totalGanado || dbUser.totalGastado || 0,
-              isDefault: true,
-            },
-          ],
-        };
-
-        setProfile(userProfile);
-        console.log('🎉 Perfil cargado exitosamente:', userProfile);
-
-      } catch (error) {
-        console.error('❌ Error cargando perfil:', error);
-        Alert.alert('Error', 'No se pudieron cargar los datos del usuario: ' + error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadUserProfile();
   }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      setLoading(true);
+      
+      const userString = await AsyncStorage.getItem('currentUser');
+      console.log('📦 Usuario desde AsyncStorage:', userString);
+      
+      if (!userString) {
+        Alert.alert('Error', 'No se encontró usuario logueado');
+        setLoading(false);
+        return;
+      }
+
+      const userData = JSON.parse(userString);
+      console.log('🔍 Datos del usuario:', userData);
+
+      const params = {
+        TableName: TABLE_NAME,
+        Key: {
+          id: userData.id
+        }
+      };
+
+      console.log('📊 Buscando en DynamoDB con ID:', userData.id);
+      
+      const result = await dynamodb.get(params).promise();
+      console.log('✅ Resultado de DynamoDB:', result);
+
+      if (!result.Item) {
+        Alert.alert('Error', 'No se encontraron datos del usuario en la base de datos');
+        setLoading(false);
+        return;
+      }
+
+      const dbUser = result.Item;
+      
+      // Usa el wallet del usuario o el tuyo por defecto
+      const defaultWalletPointer = dbUser.walletOpenPay || '$ilp.interledger-test.dev/car21';
+      
+      const userProfile: UserProfile = {
+        id: dbUser.id,
+        nombre: dbUser.nombre || 'Usuario',
+        email: dbUser.email,
+        phone: dbUser.telefono || '+525512345678',
+        userType: dbUser.userType || 'client',
+        walletOpenPay: defaultWalletPointer,
+        fechaRegistro: dbUser.fechaRegistro || new Date().toISOString(),
+        ubicacion: dbUser.ubicacion,
+        telefono: dbUser.telefono,
+        descripcion: dbUser.descripcion,
+        rating: dbUser.rating,
+        ventasRealizadas: dbUser.ventasRealizadas,
+        totalGanado: dbUser.totalGanado,
+        comprasRealizadas: dbUser.comprasRealizadas,
+        totalGastado: dbUser.totalGastado,
+        wallets: [
+          {
+            id: '1',
+            pointer: defaultWalletPointer,
+            currency: 'USD',
+            balance: dbUser.totalGanado || dbUser.totalGastado || 0,
+            isDefault: true,
+          },
+        ],
+      };
+
+      setProfile(userProfile);
+      console.log('🎉 Perfil cargado exitosamente:', userProfile);
+
+    } catch (error) {
+      console.error('❌ Error cargando perfil:', error);
+      Alert.alert('Error', 'No se pudieron cargar los datos del usuario: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddWallet = async () => {
     if (!newWalletPointer.trim()) {
@@ -140,16 +143,30 @@ const ProfileScreen = () => {
       return;
     }
 
-    if (!newWalletPointer.startsWith('$')) {
-      Alert.alert('Error', 'El pointer debe comenzar con $');
+    // Normalizar el pointer - convertir http:// a $
+    let normalizedPointer = newWalletPointer.trim();
+    
+    if (normalizedPointer.startsWith('http://') || normalizedPointer.startsWith('https://')) {
+      normalizedPointer = '$' + normalizedPointer.replace(/^https?:\/\//, '');
+    }
+
+    if (!normalizedPointer.startsWith('$')) {
+      Alert.alert('Error', 'El pointer debe comenzar con $ o http://\nEjemplo: $ilp.interledger-test.dev/usuario');
       return;
     }
 
     try {
       setAddingWallet(true);
+      
+      // Verificar si ya existe
+      if (profile?.wallets.some(w => w.pointer === normalizedPointer)) {
+        Alert.alert('Error', 'Esta wallet ya está agregada');
+        return;
+      }
+
       const newWallet: OpenPaymentWallet = {
         id: Date.now().toString(),
-        pointer: newWalletPointer.trim(),
+        pointer: normalizedPointer,
         currency: 'USD',
         isDefault: false,
       };
@@ -194,9 +211,20 @@ const ProfileScreen = () => {
   };
 
   const handleOpenWallet = (pointer: string) => {
+    // Convertir el pointer a URL de pago
     const cleanPointer = pointer.startsWith('$') ? pointer.substring(1) : pointer;
-    const url = `https://pay.interledger-test.dev/payment-choice?receiver=${cleanPointer}`;
-    Linking.openURL(url);
+    const url = `https://pay.interledger-test.dev/payment-choice?receiver=https://${cleanPointer}`;
+    
+    console.log('🔗 Abriendo URL:', url);
+    Linking.openURL(url).catch(err => {
+      console.error('Error abriendo URL:', err);
+      Alert.alert('Error', 'No se pudo abrir la wallet');
+    });
+  };
+
+  const handleCopyPointer = (pointer: string) => {
+    // Aquí podrías usar Clipboard si lo tienes instalado
+    Alert.alert('Pointer Copiado', pointer);
   };
 
   const handleRefreshBalance = async () => {
@@ -248,7 +276,7 @@ const ProfileScreen = () => {
         <Text style={styles.errorText}>No se encontraron datos de usuario</Text>
         <TouchableOpacity 
           style={styles.retryButton}
-          onPress={() => loadUserProfile()}
+          onPress={loadUserProfile}
         >
           <Text style={styles.retryText}>Reintentar</Text>
         </TouchableOpacity>
@@ -327,9 +355,11 @@ const ProfileScreen = () => {
           {/* Wallet Principal */}
           <View style={styles.dataBox}>
             <Text style={styles.label}>Wallet Principal:</Text>
-            <Text style={[styles.value, styles.walletPointer]} numberOfLines={1} ellipsizeMode="middle">
-              {profile.walletOpenPay}
-            </Text>
+            <TouchableOpacity onPress={() => handleCopyPointer(profile.walletOpenPay)}>
+              <Text style={[styles.value, styles.walletPointer]} numberOfLines={1} ellipsizeMode="middle">
+                {profile.walletOpenPay}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -406,6 +436,7 @@ const ProfileScreen = () => {
                     </Text>
                   )}
                 </View>
+                <Ionicons name="open-outline" size={20} color="#4ecdc4" style={{ marginLeft: 8 }} />
               </TouchableOpacity>
 
               {!wallet.isDefault && (
@@ -423,6 +454,10 @@ const ProfileScreen = () => {
           {/* Agregar nueva wallet */}
           <View style={styles.addWalletBox}>
             <Text style={styles.label}>Agregar nueva wallet</Text>
+            <Text style={styles.helperText}>
+              Formato: $ilp.interledger-test.dev/usuario
+              {'\n'}o http://ilp.interledger-test.dev/usuario
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="$ilp.interledger-test.dev/tuusuario"
@@ -430,7 +465,7 @@ const ProfileScreen = () => {
               onChangeText={setNewWalletPointer}
               autoCapitalize="none"
               autoCorrect={false}
-              maxLength={50}
+              maxLength={80}
             />
             <TouchableOpacity
               style={[styles.addButton, addingWallet && styles.disabledButton]}
@@ -589,6 +624,14 @@ const styles = StyleSheet.create({
   walletPointer: {
     fontFamily: 'monospace',
     fontSize: 13,
+    color: '#4ecdc4',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    marginBottom: 8,
+    lineHeight: 16,
   },
   statsBox: { 
     flexDirection: 'row', 

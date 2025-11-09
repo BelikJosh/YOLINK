@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "config": {
-        "googleMapsApiKey": ""
+        "googleMapsApiKey": "AIzaSyApyzvWHeuxEYr2JmHVa_JWmYS5Iq2e5yw"
       },
       "infoPlist": {
         "NSCameraUsageDescription": "Esta aplicación necesita acceso a la cámara para escanear códigos QR de vendedores y productos.",
